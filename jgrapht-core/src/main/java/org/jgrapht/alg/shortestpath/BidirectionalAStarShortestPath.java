@@ -123,14 +123,14 @@ public class BidirectionalAStarShortestPath<V, E>
         }
 
         // create frontiers
-        AStarSearchFrontier forwardFrontier =
-            new AStarSearchFrontier(graph, sink, forwardHeuristic);
-        AStarSearchFrontier backwardFrontier;
+        AStarSearchFrontier<V,E> forwardFrontier =
+            new AStarSearchFrontier<>(graph, sink, forwardHeuristic, heapSupplier.get());
+        AStarSearchFrontier<V,E> backwardFrontier;
         if (graph.getType().isDirected()) {
             backwardFrontier =
-                new AStarSearchFrontier(new EdgeReversedGraph<>(graph), source, backwardHeuristic);
+                new AStarSearchFrontier<>(new EdgeReversedGraph<>(graph), source, backwardHeuristic, heapSupplier.get());
         } else {
-            backwardFrontier = new AStarSearchFrontier(graph, source, backwardHeuristic);
+            backwardFrontier = new AStarSearchFrontier<>(graph, source, backwardHeuristic, heapSupplier.get());
         }
 
         forwardFrontier.updateDistance(source, null, 0.0, 0.0);
@@ -140,8 +140,8 @@ public class BidirectionalAStarShortestPath<V, E>
         double bestPath = Double.POSITIVE_INFINITY;
         V bestPathCommonVertex = null;
 
-        AStarSearchFrontier frontier = forwardFrontier;
-        AStarSearchFrontier otherFrontier = backwardFrontier;
+        AStarSearchFrontier<V,E> frontier = forwardFrontier;
+        AStarSearchFrontier<V,E> otherFrontier = backwardFrontier;
 
         TerminationCriterion condition;
         if (forwardHeuristic.isConsistent(graph)) {
@@ -190,7 +190,7 @@ public class BidirectionalAStarShortestPath<V, E>
 
             // swap frontiers
             if (frontier.openList.size() > otherFrontier.openList.size()) {
-                AStarSearchFrontier tmpFrontier = frontier;
+                AStarSearchFrontier<V,E> tmpFrontier = frontier;
                 frontier = otherFrontier;
                 otherFrontier = tmpFrontier;
             }
@@ -208,52 +208,54 @@ public class BidirectionalAStarShortestPath<V, E>
     /**
      * Maintains search frontier during shortest path computation.
      */
-    class AStarSearchFrontier
+    static class AStarSearchFrontier<V1,E1>
         extends
-        BaseSearchFrontier
+        BaseSearchFrontier<V1,E1>
     {
         /**
          * End vertex of the frontier.
          */
-        final V endVertex;
+        final V1 endVertex;
         /**
          * Heuristic used in this frontier.
          */
-        final AStarAdmissibleHeuristic<V> heuristic;
+        final AStarAdmissibleHeuristic<V1> heuristic;
         /**
          * Open nodes of the frontier.
          */
-        final AddressableHeap<Double, V> openList;
-        final Map<V, AddressableHeap.Handle<Double, V>> vertexToHeapNodeMap;
+        final AddressableHeap<Double, V1> openList;
+        final Map<V1, AddressableHeap.Handle<Double, V1>> vertexToHeapNodeMap;
         /**
          * Closed nodes of the frontier.
          */
-        final Set<V> closedList;
+        final Set<V1> closedList;
 
         /**
          * Tentative distance to the vertices in tha graph computed so far.
          */
-        final Map<V, Double> gScoreMap;
+        final Map<V1, Double> gScoreMap;
         /**
          * Predecessor map.
          */
-        final Map<V, E> cameFrom;
+        final Map<V1, E1> cameFrom;
 
-        AStarSearchFrontier(Graph<V, E> graph, V endVertex, AStarAdmissibleHeuristic<V> heuristic)
+        AStarSearchFrontier(Graph<V1, E1> graph, V1 endVertex,
+                            AStarAdmissibleHeuristic<V1> heuristic,
+                            AddressableHeap<Double, V1> openList)
         {
             super(graph);
             this.endVertex = endVertex;
             this.heuristic = heuristic;
-            openList = heapSupplier.get();
+            this.openList = openList;
             vertexToHeapNodeMap = new HashMap<>();
             closedList = new HashSet<>();
             gScoreMap = new HashMap<>();
             cameFrom = new HashMap<>();
         }
 
-        void updateDistance(V v, E e, double tentativeGScore, double fScore)
+        void updateDistance(V1 v, E1 e, double tentativeGScore, double fScore)
         {
-            AddressableHeap.Handle<Double, V> node = vertexToHeapNodeMap.get(v);
+            AddressableHeap.Handle<Double, V1> node = vertexToHeapNodeMap.get(v);
             if (vertexToHeapNodeMap.containsKey(v)) { // We re-encountered a vertex. It's
                 // either in the open or closed list.
                 if (tentativeGScore >= gScoreMap.get(v)) {// Ignore path since it is non-improving
@@ -279,7 +281,7 @@ public class BidirectionalAStarShortestPath<V, E>
         }
 
         @Override
-        double getDistance(V v)
+        double getDistance(V1 v)
         {
             Double distance = gScoreMap.get(v);
             if (distance == null) {
@@ -290,14 +292,9 @@ public class BidirectionalAStarShortestPath<V, E>
         }
 
         @Override
-        E getTreeEdge(V v)
+        E1 getTreeEdge(V1 v)
         {
-            E e = cameFrom.get(v);
-            if (e == null) {
-                return null;
-            } else {
-                return e;
-            }
+            return cameFrom.get(v);
         }
     }
 
@@ -328,10 +325,10 @@ public class BidirectionalAStarShortestPath<V, E>
      */
     abstract class TerminationCriterion
     {
-        final AStarSearchFrontier forward;
-        final AStarSearchFrontier backward;
+        final AStarSearchFrontier<V,E> forward;
+        final AStarSearchFrontier<V,E> backward;
 
-        TerminationCriterion(AStarSearchFrontier forward, AStarSearchFrontier backward)
+        TerminationCriterion(AStarSearchFrontier<V,E> forward, AStarSearchFrontier<V,E> backward)
         {
             this.forward = forward;
             this.backward = backward;
@@ -356,7 +353,7 @@ public class BidirectionalAStarShortestPath<V, E>
         final double sourceTargetEstimate;
 
         ConsistentTerminationCriterion(
-            AStarSearchFrontier forward, AStarSearchFrontier backward, double sourceTargetEstimate)
+            AStarSearchFrontier<V,E> forward, AStarSearchFrontier<V,E> backward, double sourceTargetEstimate)
         {
             super(forward, backward);
             this.sourceTargetEstimate = sourceTargetEstimate;
@@ -378,7 +375,7 @@ public class BidirectionalAStarShortestPath<V, E>
         extends
         TerminationCriterion
     {
-        InconsistentTerminationCriterion(AStarSearchFrontier forward, AStarSearchFrontier backward)
+        InconsistentTerminationCriterion(AStarSearchFrontier<V,E> forward, AStarSearchFrontier<V,E> backward)
         {
             super(forward, backward);
         }

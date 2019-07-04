@@ -5,19 +5,31 @@ import org.jgrapht.GraphPath;
 import org.jgrapht.Graphs;
 import org.jgrapht.alg.util.Pair;
 import org.jgrapht.graph.EdgeReversedGraph;
+import org.jgrapht.graph.GraphWalk;
 import org.jheaps.AddressableHeap;
+import org.jheaps.tree.PairingHeap;
 
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class ContractedBidirectionalDijkstra<V, E> extends BidirectionalDijkstraShortestPath<V, E> {
 
-    private Graph<GraphContractor.ContractionVertex<V>, GraphContractor.ContractionEdge<E>> contractionGraph;
+    private final Graph<GraphContractor.ContractionVertex<V>, GraphContractor.ContractionEdge<E>> contractionGraph;
+    private final Map<V, GraphContractor.ContractionVertex<V>> contractionMapping;
 
-    public ContractedBidirectionalDijkstra(Graph<V, E> graph) {
+    private final Supplier<AddressableHeap<Double, Pair<GraphContractor.ContractionVertex<V>,
+            GraphContractor.ContractionEdge<E>>>> contractionGraphHeapSupplier;
+
+    public ContractedBidirectionalDijkstra(Graph<V, E> graph,
+                                           Graph<GraphContractor.ContractionVertex<V>,
+                                                   GraphContractor.ContractionEdge<E>> contractionGraph,
+                                           Map<V, GraphContractor.ContractionVertex<V>> contractionMapping) {
         super(graph);
-        GraphContractor<V, E> contractor = new GraphContractor<>(graph);
-        contractionGraph = contractor.computeContractionHierarchy();
+        this.contractionGraph = contractionGraph;
+        this.contractionMapping = contractionMapping;
+        this.contractionGraphHeapSupplier = PairingHeap::new;
     }
 
     @Override
@@ -26,6 +38,8 @@ public class ContractedBidirectionalDijkstra<V, E> extends BidirectionalDijkstra
             throw new IllegalArgumentException(GRAPH_MUST_CONTAIN_THE_SOURCE_VERTEX);
         }
         if (!graph.containsVertex(sink)) {
+
+
             throw new IllegalArgumentException(GRAPH_MUST_CONTAIN_THE_SINK_VERTEX);
         }
 
@@ -35,26 +49,35 @@ public class ContractedBidirectionalDijkstra<V, E> extends BidirectionalDijkstra
         }
 
         // create frontiers
-        ContractionSearchFrontier forwardFrontier = new ContractionSearchFrontier(graph,
-                contractionGraph,
+        ContractionSearchFrontier<GraphContractor.ContractionVertex<V>, GraphContractor.ContractionEdge<E>>
+                forwardFrontier
+                = new ContractionSearchFrontier<>(contractionGraph, contractionGraphHeapSupplier.get(),
                 edge -> contractionGraph.getEdgeSource(edge).contractionIndex
                         < contractionGraph.getEdgeTarget(edge).contractionIndex);
-        ContractionSearchFrontier backwardFrontier = new ContractionSearchFrontier(new EdgeReversedGraph<>(graph),
-                contractionGraph,
+
+
+        ContractionSearchFrontier<GraphContractor.ContractionVertex<V>, GraphContractor.ContractionEdge<E>>
+                backwardFrontier
+                = new ContractionSearchFrontier<>(new EdgeReversedGraph<>(contractionGraph),
+                contractionGraphHeapSupplier.get(),
                 edge -> contractionGraph.getEdgeSource(edge).contractionIndex
                         > contractionGraph.getEdgeTarget(edge).contractionIndex);
 
+        GraphContractor.ContractionVertex<V> contractedSource = contractionMapping.get(source);
+        GraphContractor.ContractionVertex<V> contractedSink = contractionMapping.get(sink);
 
         // initialize both frontiers
-        forwardFrontier.updateDistance(source, null, 0d);
-        backwardFrontier.updateDistance(sink, null, 0d);
+        forwardFrontier.updateDistance(contractedSource, null, 0d);
+        backwardFrontier.updateDistance(contractedSink, null, 0d);
 
         // initialize best path
         double bestPath = Double.POSITIVE_INFINITY;
-        V bestPathCommonVertex = null;
+        GraphContractor.ContractionVertex<V> bestPathCommonVertex = null;
 
-        DijkstraSearchFrontier frontier = forwardFrontier;
-        DijkstraSearchFrontier otherFrontier = backwardFrontier;
+        ContractionSearchFrontier<GraphContractor.ContractionVertex<V>, GraphContractor.ContractionEdge<E>>
+                frontier = forwardFrontier;
+        ContractionSearchFrontier<GraphContractor.ContractionVertex<V>, GraphContractor.ContractionEdge<E>>
+                otherFrontier = backwardFrontier;
 
         while (true) {
             // stopping condition
@@ -65,12 +88,17 @@ public class ContractedBidirectionalDijkstra<V, E> extends BidirectionalDijkstra
             }
 
             // frontier scan
-            AddressableHeap.Handle<Double, Pair<V, E>> node = frontier.heap.deleteMin();
-            V v = node.getValue().getFirst();
+            AddressableHeap.Handle<Double, Pair<GraphContractor.ContractionVertex<V>,
+                    GraphContractor.ContractionEdge<E>>> node = frontier.heap.deleteMin();
+            GraphContractor.ContractionVertex<V> v = node.getValue().getFirst();
             double vDistance = node.getKey();
 
-            for (E e : frontier.graph.outgoingEdgesOf(v)) {
-                V u = Graphs.getOppositeVertex(frontier.graph, e, v);
+            for (GraphContractor.ContractionEdge<E> e : frontier.graph.outgoingEdgesOf(v)) {
+                if (!frontier.isUpwardEdge.apply(e)) {
+                    continue;
+                }
+
+                GraphContractor.ContractionVertex<V> u = Graphs.getOppositeVertex(frontier.graph, e, v);
 
                 double eWeight = frontier.graph.getEdgeWeight(e);
 
@@ -87,7 +115,8 @@ public class ContractedBidirectionalDijkstra<V, E> extends BidirectionalDijkstra
             }
 
             // swap frontiers
-            DijkstraSearchFrontier tmpFrontier = frontier;
+            ContractionSearchFrontier<GraphContractor.ContractionVertex<V>, GraphContractor.ContractionEdge<E>>
+                    tmpFrontier = frontier;
             frontier = otherFrontier;
             otherFrontier = tmpFrontier;
 
@@ -95,33 +124,93 @@ public class ContractedBidirectionalDijkstra<V, E> extends BidirectionalDijkstra
 
         // create path if found
         if (Double.isFinite(bestPath) && bestPath <= radius) {
-            return createPath(
-                    forwardFrontier, backwardFrontier, bestPath, source, bestPathCommonVertex, sink);
+            return createPath(forwardFrontier, backwardFrontier,
+                    bestPath, contractedSource, bestPathCommonVertex, contractedSink);
         } else {
             return createEmptyPath(source, sink);
         }
     }
 
-    @Override
-    protected GraphPath<V, E> createPath(BaseSearchFrontier forwardFrontier,
-                                         BaseSearchFrontier backwardFrontier,
-                                         double weight, V source, V commonVertex, V sink) {
-        return null;
+
+    protected GraphPath<V, E> createPath(
+            BaseSearchFrontier<GraphContractor.ContractionVertex<V>,
+                    GraphContractor.ContractionEdge<E>> forwardFrontier,
+            BaseSearchFrontier<GraphContractor.ContractionVertex<V>,
+                    GraphContractor.ContractionEdge<E>> backwardFrontier,
+            double weight,
+            GraphContractor.ContractionVertex<V> source,
+            GraphContractor.ContractionVertex<V> commonVertex,
+            GraphContractor.ContractionVertex<V> sink) {
+
+        LinkedList<E> edgeList = new LinkedList<>();
+        LinkedList<V> vertexList = new LinkedList<>();
+
+        // add common vertex
+        vertexList.add(commonVertex.vertex);
+
+        // traverse forward path
+        GraphContractor.ContractionVertex<V> v = commonVertex;
+        while (true) {
+            GraphContractor.ContractionEdge<E> e = forwardFrontier.getTreeEdge(v);
+
+            if (e == null) {
+                break;
+            }
+
+            unpackForward(e, vertexList, edgeList);
+            v = Graphs.getOppositeVertex(forwardFrontier.graph, e, v);
+        }
+
+        // traverse reverse path
+        v = commonVertex;
+        while (true) {
+            GraphContractor.ContractionEdge<E> e = backwardFrontier.getTreeEdge(v);
+
+            if (e == null) {
+                break;
+            }
+
+            unpackBackward(e, vertexList, edgeList);
+            v = Graphs.getOppositeVertex(backwardFrontier.graph, e, v);
+        }
+
+        return new GraphWalk<>(graph, source.vertex, sink.vertex, vertexList, edgeList, weight);
     }
 
-    private void unpack(GraphContractor.ContractionEdge edge, LinkedList<GraphContractor.ContractionEdge> path, boolean forward) {
-
+    // add to the lists all edges E and vertices V that are in between
+    // of source and target of #edge
+    private void unpackForward(GraphContractor.ContractionEdge<E> edge,
+                               LinkedList<V> vertexList,
+                               LinkedList<E> edgeList) {
+        if (edge.skippedEdges == null) {
+            vertexList.addFirst(contractionGraph.getEdgeSource(edge).vertex);
+            edgeList.addFirst(edge.edge);
+        } else {
+            unpackForward(edge.skippedEdges.getSecond(), vertexList, edgeList);
+            unpackForward(edge.skippedEdges.getFirst(), vertexList, edgeList);
+        }
     }
 
-    class ContractionSearchFrontier extends DijkstraSearchFrontier {
-        final Graph<GraphContractor.ContractionVertex<V>, GraphContractor.ContractionEdge<E>> contractionGraph;
-        final Function<GraphContractor.ContractionEdge<E>, Boolean> isUpwardEdge;
+    private void unpackBackward(GraphContractor.ContractionEdge<E> edge,
+                                LinkedList<V> vertexList,
+                                LinkedList<E> edgeList) {
+        if (edge.skippedEdges == null) {
+            vertexList.addLast(contractionGraph.getEdgeTarget(edge).vertex);
+            edgeList.addLast(edge.edge);
+        } else {
+            unpackForward(edge.skippedEdges.getFirst(), vertexList, edgeList);
+            unpackForward(edge.skippedEdges.getSecond(), vertexList, edgeList);
+        }
+    }
 
-        ContractionSearchFrontier(Graph<V, E> graph,
-                                  Graph<GraphContractor.ContractionVertex<V>, GraphContractor.ContractionEdge<E>> contractionGraph,
-                                  Function<GraphContractor.ContractionEdge<E>, Boolean> isUpwardEdge) {
-            super(graph);
-            this.contractionGraph = contractionGraph
+    static class ContractionSearchFrontier<V1, E1>
+            extends DijkstraSearchFrontier<V1, E1> {
+        final Function<E1, Boolean> isUpwardEdge;
+
+        ContractionSearchFrontier(Graph<V1, E1> graph,
+                                  AddressableHeap<Double, Pair<V1, E1>> heap,
+                                  Function<E1, Boolean> isUpwardEdge) {
+            super(graph, heap);
             this.isUpwardEdge = isUpwardEdge;
         }
     }

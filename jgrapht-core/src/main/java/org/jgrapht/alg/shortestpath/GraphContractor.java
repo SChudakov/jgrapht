@@ -2,7 +2,6 @@ package org.jgrapht.alg.shortestpath;
 
 import org.jgrapht.Graph;
 import org.jgrapht.GraphPath;
-import org.jgrapht.GraphType;
 import org.jgrapht.Graphs;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.jgrapht.alg.util.Pair;
@@ -26,8 +25,10 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 public class GraphContractor<V, E> {
-    private final Graph<V, E> graph;
+    private Graph<V, E> graph;
+
     private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
+    private Map<V, ContractionVertex<V>> contractionMapping;
 
     private AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue;
     private Map<ContractionVertex<V>, VertexPriority> vertexPriorityMap;
@@ -38,45 +39,53 @@ public class GraphContractor<V, E> {
     private ExecutorCompletionService<Void> completionService;
     private int parallelism;
 
+    private Runnable contractionWorker;
+
     public GraphContractor(Graph<V, E> graph) {
         this(graph, new PairingHeap<>());
     }
 
     public GraphContractor(Graph<V, E> graph, AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue) {
-        if (!graph.getType().isDirected()) {
-            throw new IllegalArgumentException("Graph should be directed!");
-        }
+        init(graph, contractionQueue, parallelism);
+    }
+
+    public GraphContractor(Graph<V, E> graph,
+                           AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue,
+                           long seed, int parallelism) {
+
+        init(graph, contractionQueue, parallelism);
+        this.contractionWorker = new ContractionWorker(contractionGraph, verticesQueue, seed);
+    }
+
+    private void init(Graph<V, E> graph,
+                      AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue,
+                      int parallelism) {
         this.graph = graph;
         this.contractionQueue = contractionQueue;
+        this.parallelism = parallelism;
+        this.contractionGraph = createContractionGraph();
+
+        contractionMapping = new HashMap<>();
         verticesQueue = new ConcurrentLinkedQueue<>();
         vertexPriorityMap = new ConcurrentHashMap<>();
         executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         completionService = new ExecutorCompletionService<>(executor);
-        parallelism = Runtime.getRuntime().availableProcessors();
     }
 
-    public Graph<ContractionVertex<V>, ContractionEdge<E>> computeContractionHierarchy() {
-        createContractionGraph();
+
+    public Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>, Map<V, ContractionVertex<V>>> computeContractionHierarchy() {
         fillContractionGraphAndVerticesQueue();
         computeInitialPriorities();
         contractVertices();
         markUpwardEdges();
-        return contractionGraph;
+        return Pair.of(contractionGraph, contractionMapping);
     }
 
-    private void createContractionGraph() {
-        GraphType type = graph.getType();
-        GraphTypeBuilder<ContractionVertex<V>, ContractionEdge<E>> resultBuilder;
+    private Graph<ContractionVertex<V>, ContractionEdge<E>> createContractionGraph() {
+        // to be able to mark upward edges correctly
+        GraphTypeBuilder<ContractionVertex<V>, ContractionEdge<E>> resultBuilder = GraphTypeBuilder.directed();
 
-        if (type.isDirected()) {
-            resultBuilder = GraphTypeBuilder.directed();
-        } else if (type.isUndirected()) {
-            resultBuilder = GraphTypeBuilder.undirected();
-        } else {
-            resultBuilder = GraphTypeBuilder.mixed();
-        }
-
-        contractionGraph = resultBuilder
+        return resultBuilder
                 .weighted(true)
                 .allowingMultipleEdges(false)
                 .allowingSelfLoops(false)
@@ -84,21 +93,19 @@ public class GraphContractor<V, E> {
     }
 
     private void fillContractionGraphAndVerticesQueue() {
-        Map<V, ContractionVertex<V>> vertexMap = new HashMap<>();
-
         for (V v : graph.vertexSet()) {
             ContractionVertex<V> vertex = new ContractionVertex<>(v);
 
             contractionGraph.addVertex(vertex);
-            vertexMap.put(v, vertex);
+            contractionMapping.put(v, vertex);
             verticesQueue.add(vertex);
         }
 
         for (E e : graph.edgeSet()) {
             ContractionEdge<E> edge = new ContractionEdge<>(e);
             contractionGraph.addEdge(
-                    vertexMap.get(graph.getEdgeSource(e)),
-                    vertexMap.get(graph.getEdgeTarget(e)),
+                    contractionMapping.get(graph.getEdgeSource(e)),
+                    contractionMapping.get(graph.getEdgeTarget(e)),
                     edge
             );
             contractionGraph.setEdgeWeight(edge, graph.getEdgeWeight(e));
@@ -106,10 +113,9 @@ public class GraphContractor<V, E> {
     }
 
     private void computeInitialPriorities() {
-        Runnable runnable = new ContractionWorker(contractionGraph, verticesQueue);
         // submit tasks
         for (int i = 0; i < parallelism; ++i) {
-            completionService.submit(runnable, null);
+            completionService.submit(contractionWorker, null);
         }
         // take tasks
         for (int i = 0; i < parallelism; ++i) {
@@ -185,8 +191,8 @@ public class GraphContractor<V, E> {
                 contractionGraph.getEdgeSource(e).contractionIndex < contractionGraph.getEdgeTarget(e).contractionIndex);
     }
 
-//    private void recomputeNeiborsPriorities(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
-//                                            ContractionVertex<V> vertex) {
+//    private void recomputeNeiborsPriorities(Graph<ContractionVertex<V1>, ContractionEdge<E1>> contractionGraph,
+//                                            ContractionVertex<V1> vertex) {
 //
 //    }
 
@@ -262,27 +268,27 @@ public class GraphContractor<V, E> {
     }
 
 
-    public static class ContractionVertex<V> {
-        V vertex;
+    public static class ContractionVertex<V1> {
+        V1 vertex;
         int contractionIndex;
         int neighborsContracted;
         boolean contracted;
 
-        public ContractionVertex(V vertex) {
+        public ContractionVertex(V1 vertex) {
             this.vertex = vertex;
         }
     }
 
-    public static class ContractionEdge<E> {
-        E edge;
-        Pair<ContractionEdge<E>, ContractionEdge<E>> skippedEdges;
+    public static class ContractionEdge<E1> {
+        E1 edge;
+        Pair<ContractionEdge<E1>, ContractionEdge<E1>> skippedEdges;
         boolean upwardEdge;
 
-        public ContractionEdge(E edge) {
+        public ContractionEdge(E1 edge) {
             this.edge = edge;
         }
 
-        public ContractionEdge(Pair<ContractionEdge<E>, ContractionEdge<E>> skippedEdges) {
+        public ContractionEdge(Pair<ContractionEdge<E1>, ContractionEdge<E1>> skippedEdges) {
             this.skippedEdges = skippedEdges;
         }
     }
@@ -294,6 +300,17 @@ public class GraphContractor<V, E> {
         private ThreadLocalRandom random;
 
         ContractionWorker(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph, Queue<ContractionVertex<V>> verticesQueue) {
+            init(contractionGraph, verticesQueue);
+        }
+
+        ContractionWorker(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                          Queue<ContractionVertex<V>> verticesQueue, long seed) {
+            init(contractionGraph, verticesQueue);
+            random.setSeed(seed);
+        }
+
+        private void init(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                          Queue<ContractionVertex<V>> verticesQueue) {
             this.contractionGraph = contractionGraph;
             this.verticesQueue = verticesQueue;
             this.random = ThreadLocalRandom.current();
