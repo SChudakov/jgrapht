@@ -44,12 +44,12 @@ import java.util.function.*;
  * @author Dimitrios Michail
  * @see DijkstraShortestPath
  */
-public final class BidirectionalDijkstraShortestPath<V, E>
+public class BidirectionalDijkstraShortestPath<V, E>
     extends
     BaseBidirectionalShortestPathAlgorithm<V, E>
 {
-    private double radius;
-    private final Supplier<AddressableHeap<Double, Pair<V, E>>> heapSupplier;
+    protected double radius;
+    protected final Supplier<AddressableHeap<Double, Pair<V, E>>> heapSupplier;
 
     /**
      * Constructs a new instance for a specified graph.
