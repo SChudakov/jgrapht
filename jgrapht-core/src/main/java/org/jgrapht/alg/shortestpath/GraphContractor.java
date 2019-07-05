@@ -2,13 +2,13 @@ package org.jgrapht.alg.shortestpath;
 
 import org.jgrapht.Graph;
 import org.jgrapht.GraphPath;
+import org.jgrapht.GraphType;
 import org.jgrapht.Graphs;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.jgrapht.alg.util.Pair;
 import org.jgrapht.graph.builder.GraphTypeBuilder;
 import org.jheaps.AddressableHeap;
 import org.jheaps.tree.PairingHeap;
-import org.omg.CORBA.INTERNAL;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -82,17 +82,26 @@ public class GraphContractor<V, E> {
         fillContractionGraphAndVerticesQueue();
         computeInitialPriorities();
         contractVertices();
-        markUpwardEdges();
+//        markUpwardEdges();
         return Pair.of(contractionGraph, contractionMapping);
     }
 
     private Graph<ContractionVertex<V>, ContractionEdge<E>> createContractionGraph() {
         // to be able to mark upward edges correctly
-        GraphTypeBuilder<ContractionVertex<V>, ContractionEdge<E>> resultBuilder = GraphTypeBuilder.directed();
+        GraphType graphType = graph.getType();
+        GraphTypeBuilder<ContractionVertex<V>, ContractionEdge<E>> resultBuilder;
+
+        if (graphType.isDirected()) {
+            resultBuilder = GraphTypeBuilder.directed();
+        } else if (graphType.isUndirected()) {
+            resultBuilder = GraphTypeBuilder.undirected();
+        } else {
+            resultBuilder = GraphTypeBuilder.mixed();
+        }
 
         return resultBuilder
                 .weighted(true)
-                .allowingMultipleEdges(false)
+                .allowingMultipleEdges(graph.getType().isAllowingMultipleEdges())
                 .allowingSelfLoops(false)
                 .vertexClass((Class<ContractionVertex<V>>) (Class<?>) ContractionVertex.class)
                 .edgeClass((Class<ContractionEdge<E>>) (Class<?>) ContractionEdge.class)
@@ -186,15 +195,15 @@ public class GraphContractor<V, E> {
 
     private void contractVertex(ContractionVertex<V> vertex, int contractionIndex,
                                 List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts) {
-
+        System.out.println(vertex.vertex);
         // add shortcuts
         for (Pair<ContractionEdge<E>, ContractionEdge<E>> shortcut : shortcuts) {
-            ContractionVertex<V> shortcutSource = contractionGraph.getEdgeSource(shortcut.getFirst());
-            ContractionVertex<V> shortcutTarget = contractionGraph.getEdgeTarget(shortcut.getSecond());
-
+            ContractionVertex<V> shortcutSource = Graphs.getOppositeVertex(contractionGraph, shortcut.getFirst(), vertex);
+            ContractionVertex<V> shortcutTarget = Graphs.getOppositeVertex(contractionGraph, shortcut.getSecond(), vertex);
             ContractionEdge<E> shortcutEdge = new ContractionEdge<>(shortcut);
+
             System.out.println(contractionGraph.addEdge(shortcutSource, shortcutTarget, shortcutEdge));
-            contractionGraph.setEdgeWeight(shortcutEdge,
+            contractionGraph.setEdgeWeight(contractionGraph.getEdge(shortcutSource, shortcutTarget),
                     contractionGraph.getEdgeWeight(shortcut.getFirst())
                             + contractionGraph.getEdgeWeight(shortcut.getSecond()));
         }
@@ -208,10 +217,10 @@ public class GraphContractor<V, E> {
         Graphs.predecessorListOf(contractionGraph, vertex).forEach(v -> ++v.neighborsContracted);
     }
 
-    private void markUpwardEdges() {
-        contractionGraph.edgeSet().forEach(e -> e.upwardEdge =
-                contractionGraph.getEdgeSource(e).contractionIndex < contractionGraph.getEdgeTarget(e).contractionIndex);
-    }
+//    private void markUpwardEdges() {
+//        contractionGraph.edgeSet().forEach(e -> e.upwardEdge =
+//                contractionGraph.getEdgeSource(e).contractionIndex < contractionGraph.getEdgeTarget(e).contractionIndex);
+//    }
 
 //    private void recomputeNeiborsPriorities(Graph<ContractionVertex<V1>, ContractionEdge<E1>> contractionGraph,
 //                                            ContractionVertex<V1> vertex) {
@@ -223,7 +232,7 @@ public class GraphContractor<V, E> {
 
         List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts = getShortcuts(vertex);
         VertexPriority priority = new VertexPriority(
-                vertex.vertex.equals(5) ? Integer.MIN_VALUE: shortcuts.size() - getEdgeRemovedCount(vertex),
+                vertex.vertex.equals(5) ? Integer.MIN_VALUE : shortcuts.size() - getEdgeRemovedCount(vertex),
                 vertex.neighborsContracted,
                 random
         );
@@ -243,7 +252,7 @@ public class GraphContractor<V, E> {
 
         double maxOutgoingEdgeWeight = Double.MIN_VALUE;
         for (ContractionEdge<E> outEdge : contractionGraph.outgoingEdgesOf(vertex)) {
-            ContractionVertex<V> successor = contractionGraph.getEdgeTarget(outEdge);
+            ContractionVertex<V> successor = Graphs.getOppositeVertex(contractionGraph, outEdge, vertex);
             if (!successor.contracted) { // do not consider contracted vertices
                 successors.add(successor);
                 maxOutgoingEdgeWeight = Math.max(maxOutgoingEdgeWeight, contractionGraph.getEdgeWeight(outEdge));
@@ -252,7 +261,7 @@ public class GraphContractor<V, E> {
 
 
         for (ContractionEdge<E> inEdge : contractionGraph.incomingEdgesOf(vertex)) {
-            ContractionVertex<V> predecessor = contractionGraph.getEdgeSource(inEdge);
+            ContractionVertex<V> predecessor = Graphs.getOppositeVertex(contractionGraph, inEdge, vertex);
             if (!predecessor.contracted) { // do not consider contracted vertices
                 DijkstraClosestFirstIterator<ContractionVertex<V>, ContractionEdge<E>> it =
                         new DijkstraClosestFirstIterator<>(
@@ -319,7 +328,7 @@ public class GraphContractor<V, E> {
     public static class ContractionEdge<E1> {
         E1 edge;
         Pair<ContractionEdge<E1>, ContractionEdge<E1>> skippedEdges;
-        boolean upwardEdge;
+//        boolean upwardEdge;
 
         public ContractionEdge(E1 edge) {
             this.edge = edge;
@@ -334,7 +343,7 @@ public class GraphContractor<V, E> {
             return "ContractionEdge{" +
                     "edge=" + edge +
                     ", skippedEdges=" + skippedEdges +
-                    ", upwardEdge=" + upwardEdge +
+//                    ", upwardEdge=" + upwardEdge +
                     '}';
         }
     }

@@ -11,7 +11,7 @@ import org.jheaps.tree.PairingHeap;
 
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 public class ContractedBidirectionalDijkstra<V, E> extends BidirectionalDijkstraShortestPath<V, E> {
@@ -52,16 +52,16 @@ public class ContractedBidirectionalDijkstra<V, E> extends BidirectionalDijkstra
         ContractionSearchFrontier<GraphContractor.ContractionVertex<V>, GraphContractor.ContractionEdge<E>>
                 forwardFrontier
                 = new ContractionSearchFrontier<>(contractionGraph, contractionGraphHeapSupplier.get(),
-                edge -> contractionGraph.getEdgeSource(edge).contractionIndex
-                        < contractionGraph.getEdgeTarget(edge).contractionIndex);
+                (edge, sourceVertex) -> sourceVertex.contractionIndex
+                        < Graphs.getOppositeVertex(contractionGraph, edge, sourceVertex).contractionIndex);
 
 
         ContractionSearchFrontier<GraphContractor.ContractionVertex<V>, GraphContractor.ContractionEdge<E>>
                 backwardFrontier
                 = new ContractionSearchFrontier<>(new EdgeReversedGraph<>(contractionGraph),
                 contractionGraphHeapSupplier.get(),
-                edge -> contractionGraph.getEdgeSource(edge).contractionIndex
-                        > contractionGraph.getEdgeTarget(edge).contractionIndex);
+                (edge, sourceVertex) -> sourceVertex.contractionIndex
+                        > Graphs.getOppositeVertex(contractionGraph, edge, sourceVertex).contractionIndex);
 
         GraphContractor.ContractionVertex<V> contractedSource = contractionMapping.get(source);
         GraphContractor.ContractionVertex<V> contractedSink = contractionMapping.get(sink);
@@ -94,7 +94,7 @@ public class ContractedBidirectionalDijkstra<V, E> extends BidirectionalDijkstra
             double vDistance = node.getKey();
 
             for (GraphContractor.ContractionEdge<E> e : frontier.graph.outgoingEdgesOf(v)) {
-                if (!frontier.isUpwardEdge.apply(e)) {
+                if (!frontier.isUpwardEdge.apply(e, v)) {
                     continue;
                 }
 
@@ -205,11 +205,12 @@ public class ContractedBidirectionalDijkstra<V, E> extends BidirectionalDijkstra
 
     static class ContractionSearchFrontier<V1, E1>
             extends DijkstraSearchFrontier<V1, E1> {
-        final Function<E1, Boolean> isUpwardEdge;
+        // TODO: change to determining upwarness with respect to source vertex (undirected graph case)
+        final BiFunction<E1, V1, Boolean> isUpwardEdge;
 
         ContractionSearchFrontier(Graph<V1, E1> graph,
                                   AddressableHeap<Double, Pair<V1, E1>> heap,
-                                  Function<E1, Boolean> isUpwardEdge) {
+                                  BiFunction<E1, V1, Boolean> isUpwardEdge) {
             super(graph, heap);
             this.isUpwardEdge = isUpwardEdge;
         }

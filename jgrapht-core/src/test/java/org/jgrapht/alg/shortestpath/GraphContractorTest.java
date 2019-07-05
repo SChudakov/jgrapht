@@ -310,7 +310,7 @@ public class GraphContractorTest {
 
         assertEquals(5, graph.vertexSet().size());
 
-        if (contractionMapping.get(2).contractionIndex == 0) {
+        if (contractionMapping.get(5).contractionIndex == 0) {
             assertEquals(10, contractionGraph.edgeSet().size());
 
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(2)));
