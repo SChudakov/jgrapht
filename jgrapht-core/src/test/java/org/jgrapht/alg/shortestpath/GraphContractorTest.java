@@ -10,7 +10,6 @@ import org.jheaps.tree.PairingHeap;
 import org.junit.Test;
 
 import java.util.Map;
-import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -22,8 +21,7 @@ public class GraphContractorTest {
     @Test
     public void testEmptyGraph() {
         Graph<Integer, DefaultWeightedEdge> graph = new DefaultUndirectedWeightedGraph<>(DefaultWeightedEdge.class);
-        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph,
-                new PairingHeap<>(), Random::new, 0, Runtime.getRuntime().availableProcessors());
+        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph, new PairingHeap<>());
         Pair<Graph<GraphContractor.ContractionVertex<Integer>,
                 GraphContractor.ContractionEdge<DefaultWeightedEdge>>,
                 Map<Integer, GraphContractor.ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
@@ -51,8 +49,7 @@ public class GraphContractorTest {
         Graphs.addEdgeWithVertices(graph, 1, 2, 1);
         Graphs.addEdgeWithVertices(graph, 2, 3, 1);
 
-        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph,
-                new PairingHeap<>(), Random::new, 0, 1);
+        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph, new PairingHeap<>());
         Pair<Graph<GraphContractor.ContractionVertex<Integer>,
                 GraphContractor.ContractionEdge<DefaultWeightedEdge>>,
                 Map<Integer, GraphContractor.ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
@@ -81,12 +78,11 @@ public class GraphContractorTest {
         Graph<Integer, DefaultWeightedEdge> graph = new DefaultDirectedWeightedGraph<>(DefaultWeightedEdge.class);
 
         Graphs.addEdgeWithVertices(graph, 1, 2, 1);
-        Graphs.addEdgeWithVertices(graph, 2, 3, 1);
         Graphs.addEdgeWithVertices(graph, 2, 1, 1);
+        Graphs.addEdgeWithVertices(graph, 2, 3, 1);
         Graphs.addEdgeWithVertices(graph, 3, 2, 1);
 
-        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph,
-                new PairingHeap<>(), Random::new, 0, 1);
+        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph, new PairingHeap<>());
         Pair<Graph<GraphContractor.ContractionVertex<Integer>,
                 GraphContractor.ContractionEdge<DefaultWeightedEdge>>,
                 Map<Integer, GraphContractor.ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
@@ -114,7 +110,6 @@ public class GraphContractorTest {
         }
     }
 
-
     @Test
     public void testDirectedGraph3() {
         Graph<Integer, DefaultWeightedEdge> graph = new DefaultDirectedWeightedGraph<>(DefaultWeightedEdge.class);
@@ -125,8 +120,7 @@ public class GraphContractorTest {
         Graphs.addEdgeWithVertices(graph, 5, 6, 1);
         Graphs.addEdgeWithVertices(graph, 5, 7, 1);
 
-        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph,
-                new PairingHeap<>(), Random::new, 0, 1);
+        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph, new PairingHeap<>());
         Pair<Graph<GraphContractor.ContractionVertex<Integer>,
                 GraphContractor.ContractionEdge<DefaultWeightedEdge>>,
                 Map<Integer, GraphContractor.ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
@@ -176,8 +170,7 @@ public class GraphContractorTest {
         Graphs.addEdgeWithVertices(graph, 5, 7, 1);
         Graphs.addEdgeWithVertices(graph, 7, 5, 1);
 
-        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph,
-                new PairingHeap<>(), Random::new, 0, 1);
+        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph, new PairingHeap<>());
         Pair<Graph<GraphContractor.ContractionVertex<Integer>,
                 GraphContractor.ContractionEdge<DefaultWeightedEdge>>,
                 Map<Integer, GraphContractor.ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
@@ -261,8 +254,7 @@ public class GraphContractorTest {
         Graphs.addEdgeWithVertices(graph, 1, 2, 1);
         Graphs.addEdgeWithVertices(graph, 2, 3, 1);
 
-        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph,
-                new PairingHeap<>(), Random::new, 0, 1);
+        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph, new PairingHeap<>());
         Pair<Graph<GraphContractor.ContractionVertex<Integer>,
                 GraphContractor.ContractionEdge<DefaultWeightedEdge>>,
                 Map<Integer, GraphContractor.ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
@@ -296,8 +288,7 @@ public class GraphContractorTest {
         Graphs.addEdgeWithVertices(graph, 5, 6, 1);
         Graphs.addEdgeWithVertices(graph, 5, 7, 1);
 
-        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph,
-                new PairingHeap<>(), Random::new, 0, 1);
+        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph, new PairingHeap<>());
         Pair<Graph<GraphContractor.ContractionVertex<Integer>,
                 GraphContractor.ContractionEdge<DefaultWeightedEdge>>,
                 Map<Integer, GraphContractor.ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
@@ -345,6 +336,44 @@ public class GraphContractorTest {
         } else {
             assertEquals(4, contractionGraph.edgeSet().size());
         }
+    }
+
+    @Test
+    public void testUndirectedGraph3() {
+        Graph<Integer, DefaultWeightedEdge> graph = new DefaultUndirectedWeightedGraph<>(DefaultWeightedEdge.class);
+
+        Graphs.addEdgeWithVertices(graph, 1, 2, 3);
+        Graphs.addEdgeWithVertices(graph, 1, 4, 1);
+
+        Graphs.addEdgeWithVertices(graph, 2, 3, 3);
+        Graphs.addEdgeWithVertices(graph, 2, 5, 1);
+
+        Graphs.addEdgeWithVertices(graph, 3, 6, 1);
+
+        Graphs.addEdgeWithVertices(graph, 4, 5, 1);
+        Graphs.addEdgeWithVertices(graph, 4, 7, 1);
+
+        Graphs.addEdgeWithVertices(graph, 5, 6, 1);
+        Graphs.addEdgeWithVertices(graph, 5, 8, 1);
+
+        Graphs.addEdgeWithVertices(graph, 6, 9, 1);
+
+        Graphs.addEdgeWithVertices(graph, 7, 8, 3);
+        Graphs.addEdgeWithVertices(graph, 8, 9, 3);
+
+        GraphContractor<Integer, DefaultWeightedEdge> contractor = new GraphContractor<>(graph, new PairingHeap<>());
+        Pair<Graph<GraphContractor.ContractionVertex<Integer>,
+                GraphContractor.ContractionEdge<DefaultWeightedEdge>>,
+                Map<Integer, GraphContractor.ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
+
+        assertNotNull(p);
+
+        Graph<GraphContractor.ContractionVertex<Integer>,
+                GraphContractor.ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
+        Map<Integer, GraphContractor.ContractionVertex<Integer>> contractionMapping = p.getSecond();
+
+        assertEquals(9, graph.vertexSet().size());
+        assertEquals(12, contractionGraph.edgeSet().size());
     }
 
     @Test
