@@ -27,7 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-public class GraphContractor<V, E> {
+public class ContractionHierarchyAlgorithm<V, E> {
     private Graph<V, E> graph;
 
     private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
@@ -44,16 +44,16 @@ public class GraphContractor<V, E> {
 
     private Supplier<Random> randomSupplier;
 
-    public GraphContractor(Graph<V, E> graph) {
+    public ContractionHierarchyAlgorithm(Graph<V, E> graph) {
         this(graph, new PairingHeap<>());
     }
 
-    public GraphContractor(Graph<V, E> graph, AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue) {
+    public ContractionHierarchyAlgorithm(Graph<V, E> graph, AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue) {
         init(graph, contractionQueue, Random::new, Runtime.getRuntime().availableProcessors());
     }
 
-    public GraphContractor(Graph<V, E> graph, AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue,
-                           Supplier<Random> randomSupplier, int parallelism) {
+    public ContractionHierarchyAlgorithm(Graph<V, E> graph, AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue,
+                                         Supplier<Random> randomSupplier, int parallelism) {
         init(graph, contractionQueue, randomSupplier, parallelism);
     }
 
@@ -61,6 +61,9 @@ public class GraphContractor<V, E> {
                       AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue,
                       Supplier<Random> randomSupplier,
                       int parallelism) {
+        if (!graph.getType().isSimple()) {
+            throw new IllegalArgumentException("Graph should be simple!");
+        }
         this.graph = graph;
         this.contractionQueue = contractionQueue;
         this.parallelism = parallelism;
@@ -184,14 +187,14 @@ public class GraphContractor<V, E> {
 
     private void contractVertex(ContractionVertex<V> vertex, int contractionIndex,
                                 List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts) {
-        System.out.println(vertex.vertex);
+//        System.out.println(vertex.vertex);
         // add shortcuts
         for (Pair<ContractionEdge<E>, ContractionEdge<E>> shortcut : shortcuts) {
             ContractionVertex<V> shortcutSource = Graphs.getOppositeVertex(contractionGraph, shortcut.getFirst(), vertex);
             ContractionVertex<V> shortcutTarget = Graphs.getOppositeVertex(contractionGraph, shortcut.getSecond(), vertex);
             ContractionEdge<E> shortcutEdge = new ContractionEdge<>(shortcut);
 
-            System.out.println(contractionGraph.addEdge(shortcutSource, shortcutTarget, shortcutEdge));
+            contractionGraph.addEdge(shortcutSource, shortcutTarget, shortcutEdge);
             contractionGraph.setEdgeWeight(contractionGraph.getEdge(shortcutSource, shortcutTarget),
                     contractionGraph.getEdgeWeight(shortcut.getFirst())
                             + contractionGraph.getEdgeWeight(shortcut.getSecond()));
