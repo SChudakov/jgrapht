@@ -241,8 +241,8 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
             return oppositeVertex;
         } else {
             if (graph.getType().isDirected()) {
-                oppositeVertex = unpackForward(edge.skippedEdges.getFirst(), vertex, vertexList, edgeList);
-                return unpackForward(edge.skippedEdges.getSecond(), oppositeVertex, vertexList, edgeList);
+                oppositeVertex = unpackBackward(edge.skippedEdges.getFirst(), vertex, vertexList, edgeList);
+                return unpackBackward(edge.skippedEdges.getSecond(), oppositeVertex, vertexList, edgeList);
             } else {
                 ContractionHierarchyAlgorithm.ContractionEdge<E> second = edge.skippedEdges.getSecond();
                 if (contractionGraph.getEdgeTarget(second).equals(vertex) ||
