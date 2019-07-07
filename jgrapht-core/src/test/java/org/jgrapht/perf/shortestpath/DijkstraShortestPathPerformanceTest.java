@@ -26,6 +26,7 @@ import org.jgrapht.graph.builder.*;
 import org.jgrapht.traverse.*;
 import org.jgrapht.util.*;
 import org.junit.*;
+import org.omg.CORBA.INTERNAL;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -50,9 +51,9 @@ public class DijkstraShortestPathPerformanceTest
         protected Random rng = new Random(SEED);
         protected GraphGenerator<Integer, DefaultWeightedEdge, Integer> generator = null;
         protected Graph<Integer, DefaultWeightedEdge> graph;
+        protected ShortestPathAlgorithm<Integer, DefaultWeightedEdge> algorithm;
 
-        abstract ShortestPathAlgorithm<Integer, DefaultWeightedEdge> createSolver(
-            Graph<Integer, DefaultWeightedEdge> graph);
+        abstract void createSolver();
 
         public void setup()
         {
@@ -64,8 +65,8 @@ public class DijkstraShortestPathPerformanceTest
 
             this.graph = GraphTypeBuilder
                 .directed().weighted(true).edgeClass(DefaultWeightedEdge.class)
-                .vertexSupplier(SupplierUtil.createIntegerSupplier()).allowingMultipleEdges(true)
-                .allowingSelfLoops(true).buildGraph();
+                .vertexSupplier(SupplierUtil.createIntegerSupplier()).allowingMultipleEdges(false)
+                .allowingSelfLoops(false).buildGraph();
 
             generator.generateGraph(graph);
 
@@ -76,10 +77,11 @@ public class DijkstraShortestPathPerformanceTest
 
         public void run()
         {
-            ShortestPathAlgorithm<Integer, DefaultWeightedEdge> sp = createSolver(graph);
+//            int i = 0;
             for (Integer v : graph.vertexSet()) {
                 for (Integer u : graph.vertexSet()) {
-                    sp.getPath(v, u);
+//                    System.out.println(i++);
+                    algorithm.getPath(v, u);
                 }
             }
         }
@@ -90,10 +92,9 @@ public class DijkstraShortestPathPerformanceTest
         BenchmarkBase
     {
         @Override
-        ShortestPathAlgorithm<Integer, DefaultWeightedEdge> createSolver(
-            Graph<Integer, DefaultWeightedEdge> graph)
+        void createSolver()
         {
-            return new DijkstraShortestPath<>(graph);
+            algorithm = new DijkstraShortestPath<>(graph);
         }
 
         @Override
@@ -108,10 +109,9 @@ public class DijkstraShortestPathPerformanceTest
         BenchmarkBase
     {
         @Override
-        ShortestPathAlgorithm<Integer, DefaultWeightedEdge> createSolver(
-            Graph<Integer, DefaultWeightedEdge> graph)
+        void createSolver()
         {
-            return new BFSShortestPath<>(graph);
+            algorithm = new BFSShortestPath<>(graph);
         }
 
         @Override
@@ -126,10 +126,9 @@ public class DijkstraShortestPathPerformanceTest
         BenchmarkBase
     {
         @Override
-        ShortestPathAlgorithm<Integer, DefaultWeightedEdge> createSolver(
-            Graph<Integer, DefaultWeightedEdge> graph)
+        void createSolver()
         {
-            return new ShortestPathAlgorithm<Integer, DefaultWeightedEdge>()
+            algorithm = new ShortestPathAlgorithm<Integer, DefaultWeightedEdge>()
             {
 
                 @Override
@@ -180,10 +179,9 @@ public class DijkstraShortestPathPerformanceTest
         BenchmarkBase
     {
         @Override
-        ShortestPathAlgorithm<Integer, DefaultWeightedEdge> createSolver(
-            Graph<Integer, DefaultWeightedEdge> graph)
+        void createSolver()
         {
-            return new BidirectionalDijkstraShortestPath<>(graph);
+            algorithm = new BidirectionalDijkstraShortestPath<>(graph);
 
         }
 
@@ -199,10 +197,9 @@ public class DijkstraShortestPathPerformanceTest
         BenchmarkBase
     {
         @Override
-        ShortestPathAlgorithm<Integer, DefaultWeightedEdge> createSolver(
-            Graph<Integer, DefaultWeightedEdge> graph)
+        void createSolver()
         {
-            return new AStarShortestPath<>(graph, (u, t) -> 0d);
+            algorithm = new AStarShortestPath<>(graph, (u, t) -> 0d);
 
         }
 
@@ -225,15 +222,14 @@ public class DijkstraShortestPathPerformanceTest
         }
 
         @Override
-        ShortestPathAlgorithm<Integer, DefaultWeightedEdge> createSolver(
-            Graph<Integer, DefaultWeightedEdge> graph)
+        void createSolver()
         {
             Integer[] vertices = graph.vertexSet().toArray(new Integer[0]);
             Set<Integer> landmarks = new HashSet<>();
             while (landmarks.size() < totalLandmarks) {
                 landmarks.add(vertices[rng.nextInt(graph.vertexSet().size())]);
             }
-            return new AStarShortestPath<>(graph, new ALTAdmissibleHeuristic<>(graph, landmarks));
+            algorithm = new AStarShortestPath<>(graph, new ALTAdmissibleHeuristic<>(graph, landmarks));
         }
 
         @Override
@@ -248,10 +244,9 @@ public class DijkstraShortestPathPerformanceTest
         BenchmarkBase
     {
         @Override
-        ShortestPathAlgorithm<Integer, DefaultWeightedEdge> createSolver(
-            Graph<Integer, DefaultWeightedEdge> graph)
+        void createSolver()
         {
-            return new BidirectionalAStarShortestPath<>(graph, (u, t) -> 0d);
+            algorithm = new BidirectionalAStarShortestPath<>(graph, (u, t) -> 0d);
         }
 
         @Override
@@ -273,8 +268,7 @@ public class DijkstraShortestPathPerformanceTest
         }
 
         @Override
-        ShortestPathAlgorithm<Integer, DefaultWeightedEdge> createSolver(
-            Graph<Integer, DefaultWeightedEdge> graph)
+        void createSolver()
         {
             Integer[] vertices = graph.vertexSet().toArray(new Integer[0]);
             Set<Integer> landmarks = new HashSet<>();
@@ -283,13 +277,21 @@ public class DijkstraShortestPathPerformanceTest
             }
             AStarAdmissibleHeuristic<Integer> heuristic =
                 new ALTAdmissibleHeuristic<>(graph, landmarks);
-            return new BidirectionalAStarShortestPath<>(graph, heuristic);
+            algorithm = new BidirectionalAStarShortestPath<>(graph, heuristic);
         }
 
         @Override
         public String toString()
         {
             return "Bidirectional A* with ALT heuristic (" + totalLandmarks + " random landmarks)";
+        }
+    }
+
+    public static class ContractionHierarchyBenchmark extends BenchmarkBase{
+
+        @Override
+        void createSolver() {
+            algorithm = new ContractionHierarchyBidirectionalDijkstra<>(graph);
         }
     }
 
@@ -305,16 +307,17 @@ public class DijkstraShortestPathPerformanceTest
         System.out.println("Averaging results over " + REPEAT + " executions");
 
         List<Supplier<BenchmarkBase>> algFactory = new ArrayList<>();
-        algFactory.add(() -> new ClosestFirstIteratorBenchmark());
-        algFactory.add(() -> new DijkstraBenchmark());
-        algFactory.add(() -> new AStarNoHeuristicBenchmark());
-        algFactory.add(() -> new AStarALTBenchmark(1));
-        algFactory.add(() -> new AStarALTBenchmark(5));
-        algFactory.add(() -> new BidirectionalDijkstraBenchmark());
-        algFactory.add(() -> new BFSShortestPathBenchmark());
-        algFactory.add(() -> new BidirectionalAStarALTBenchmark(1));
-        algFactory.add(() -> new BidirectionalAStarALTBenchmark(5));
-        algFactory.add(() -> new BidirectionalAStarNoHeuristicBenchmark());
+//        algFactory.add(() -> new ClosestFirstIteratorBenchmark());
+//        algFactory.add(() -> new DijkstraBenchmark());
+//        algFactory.add(() -> new AStarNoHeuristicBenchmark());
+//        algFactory.add(() -> new AStarALTBenchmark(1));
+//        algFactory.add(() -> new AStarALTBenchmark(5));
+//        algFactory.add(() -> new BidirectionalDijkstraBenchmark());
+//        algFactory.add(() -> new BFSShortestPathBenchmark());
+//        algFactory.add(() -> new BidirectionalAStarALTBenchmark(1));
+//        algFactory.add(() -> new BidirectionalAStarALTBenchmark(5));
+//        algFactory.add(() -> new BidirectionalAStarNoHeuristicBenchmark());
+        algFactory.add(() -> new ContractionHierarchyBenchmark());
 
         for (Supplier<BenchmarkBase> alg : algFactory) {
 
@@ -325,17 +328,26 @@ public class DijkstraShortestPathPerformanceTest
             System.out.printf("%-50s :", benchmark.toString());
 
             for (int i = 0; i < WARMUP_REPEAT; i++) {
+                System.out.println(i);
+                System.out.flush();
                 System.out.print("-");
                 benchmark.setup();
+                benchmark.createSolver();
                 benchmark.run();
             }
             double avgGraphCreate = 0d;
+            double avgPrecompute = 0d;
             double avgExecution = 0d;
             for (int i = 0; i < REPEAT; i++) {
+                System.out.println(i);
+                System.out.flush();
                 System.out.print("+");
                 watch.start();
                 benchmark.setup();
                 avgGraphCreate += watch.getElapsed(TimeUnit.MILLISECONDS);
+                watch.start();
+                benchmark.createSolver();
+                avgPrecompute += watch.getElapsed(TimeUnit.MILLISECONDS);
                 watch.start();
                 benchmark.run();
                 avgExecution += watch.getElapsed(TimeUnit.MILLISECONDS);
@@ -345,7 +357,7 @@ public class DijkstraShortestPathPerformanceTest
 
             System.out.print(" -> ");
             System.out
-                .printf("setup %.3f (ms) | execution %.3f (ms)\n", avgGraphCreate, avgExecution);
+                .printf("setup %.3f (ms) | precompute %.3f (ms) | execution %.3f (ms)\n", avgGraphCreate, avgPrecompute, avgExecution);
         }
 
     }

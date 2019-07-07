@@ -99,11 +99,11 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
             // stopping condition for search
             if (frontier.isFinished && otherFrontier.isFinished) {
                 break;
-            } else if (!frontier.isFinished && !otherFrontier.isFinished) {
+            } /*else if (!frontier.isFinished && !otherFrontier.isFinished) {
                 if (frontier.heap.findMin().getKey() + otherFrontier.heap.findMin().getKey() >= bestPath) {
                     break;
                 }
-            }
+            }*/
 
             // stopping condition for current frontier
             if (frontier.heap.findMin().getKey() >= bestPath) {
@@ -147,6 +147,19 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
 
         // create path if found
         if (Double.isFinite(bestPath) && bestPath <= radius) {
+//            GraphPath<V, E> result =  createPath(forwardFrontier, backwardFrontier,
+//                    bestPath, contractedSource, bestPathCommonVertex, contractedSink);
+//            GraphPath<ContractionHierarchyAlgorithm.ContractionVertex<V>, ContractionHierarchyAlgorithm.ContractionEdge<E>>
+//                    contractedPath = new BidirectionalDijkstraShortestPath<>(contractionGraph).createPath(
+//                    forwardFrontier,
+//                    backwardFrontier,
+//                    bestPath,
+//                    contractedSource,
+//                    bestPathCommonVertex,
+//                    contractedSink
+//            );
+//            System.out.println("contracted path length: " + contractedPath.getLength());
+//            System.out.println("unpacked path length: " + result.getLength());
             return createPath(forwardFrontier, backwardFrontier,
                     bestPath, contractedSource, bestPathCommonVertex, contractedSink);
         } else {

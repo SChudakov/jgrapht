@@ -7,6 +7,7 @@ import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.jgrapht.generate.GnmRandomGraphGenerator;
 import org.jgrapht.generate.GraphGenerator;
 import org.jgrapht.graph.DefaultWeightedEdge;
+import org.jgrapht.graph.SimpleDirectedWeightedGraph;
 import org.jgrapht.graph.SimpleWeightedGraph;
 import org.jgrapht.util.SupplierUtil;
 import org.jheaps.tree.PairingHeap;
@@ -21,7 +22,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 public class ContractionHierarchyBidirectionalDijkstraTest {
-    private static final long SEED = 17L;
+    private static final long SEED = 19L;
 
     @Test
     public void testEmptyGraph() {
@@ -167,9 +168,9 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
 
     @Test
     public void testOnRandomGraphs() {
-        int numOfVertices = 10;
-        int vertexDegree = 3;
-        int numOfIterations = 10000;
+        int numOfVertices = 1000;
+        int vertexDegree = 10;
+        int numOfIterations = 10;
         int source = 0;
         for (int i = 0; i < numOfIterations; i++) {
             System.out.println("iteration: " + i);
@@ -210,8 +211,8 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
 
     private Graph<Integer, DefaultWeightedEdge> generateRandomGraph(
             int numOfVertices, int numOfEdges) {
-        SimpleWeightedGraph<Integer, DefaultWeightedEdge> graph =
-                new SimpleWeightedGraph<>(DefaultWeightedEdge.class);
+        SimpleDirectedWeightedGraph<Integer, DefaultWeightedEdge> graph =
+                new SimpleDirectedWeightedGraph<>(DefaultWeightedEdge.class);
         graph.setVertexSupplier(SupplierUtil.createIntegerSupplier());
 
         Random random = new Random(SEED);
@@ -246,14 +247,14 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
         for (Integer sink : vertexSet) {
             GraphPath<Integer, DefaultWeightedEdge> path1 = expected.getPath(sink);
             GraphPath<Integer, DefaultWeightedEdge> path2 = actual.getPath(sink);
-            System.out.println("expected: " + path1);
-            for (DefaultWeightedEdge edge : path1.getEdgeList()) {
-                System.out.println(edge + " " + graph.getEdgeWeight(edge));
-            }
-            System.out.println("actual: " + path2);
-            for (DefaultWeightedEdge edge : path2.getEdgeList()) {
-                System.out.println(edge + " " + graph.getEdgeWeight(edge));
-            }
+//            System.out.println("expected: " + path1);
+//            for (DefaultWeightedEdge edge : path1.getEdgeList()) {
+//                System.out.println(edge + " " + graph.getEdgeWeight(edge));
+//            }
+//            System.out.println("actual: " + path2);
+//            for (DefaultWeightedEdge edge : path2.getEdgeList()) {
+//                System.out.println(edge + " " + graph.getEdgeWeight(edge));
+//            }
             if (path1 == null) {
                 assertNull(path2);
             } else {
