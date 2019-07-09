@@ -4,6 +4,7 @@ import org.jgrapht.Graph;
 import org.jgrapht.GraphPath;
 import org.jgrapht.Graphs;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
+import org.jgrapht.alg.util.Pair;
 import org.jgrapht.generate.GnmRandomGraphGenerator;
 import org.jgrapht.generate.GraphGenerator;
 import org.jgrapht.graph.DefaultWeightedEdge;
@@ -13,8 +14,11 @@ import org.jgrapht.util.SupplierUtil;
 import org.jheaps.tree.PairingHeap;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
@@ -179,19 +183,137 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
             try {
                 test(graph, source);
             } catch (Error e) {
-                System.out.println(graph);
-                System.out.println(source);
-                for (Integer vertex : graph.vertexSet()) {
-                    for (DefaultWeightedEdge edge : graph.outgoingEdgesOf(vertex)) {
-                        if (graph.getEdgeSource(edge).equals(vertex)) {
-                            System.out.println(edge + " " + graph.getEdgeWeight(edge));
-                        }
-                    }
-                    System.out.println();
-                }
+//                System.out.println(graph);
+//                System.out.println(source);
+//                for (Integer vertex : graph.vertexSet()) {
+//                    for (DefaultWeightedEdge edge : graph.outgoingEdgesOf(vertex)) {
+//                        if (graph.getEdgeSource(edge).equals(vertex)) {
+//                            System.out.println(edge + " " + graph.getEdgeWeight(edge));
+//                        }
+//                    }
+//                    System.out.println();
+//                }
                 throw e;
             }
         }
+    }
+
+
+    @Test
+    public void testRingGraph() {
+        int size = 20;
+        Graph<Integer, DefaultWeightedEdge> graph = new SimpleWeightedGraph<>(DefaultWeightedEdge.class);
+        fillLineGraph(graph, size);
+        System.out.println("graph generated");
+        test(graph, 0);
+    }
+
+    private void fillLineGraph(Graph<Integer, DefaultWeightedEdge> graph, int size) {
+        Random random = new Random(SEED);
+        for (int i = 0; i < size; ++i) {
+            graph.addVertex(i);
+        }
+        for (int i = 0; i < size; ++i) {
+            graph.addEdge(i, (i + 1) % size);
+            graph.setEdgeWeight(graph.getEdge(i, (i + 1) % size), random.nextDouble());
+        }
+    }
+
+    @Test
+    public void testRoadNetwork() {
+        String path = "/home/semen/drive/osm/final/andorra.txt";
+
+        Graph<ShortestPathPerformance.Node, DefaultWeightedEdge> graph
+                = new SimpleDirectedWeightedGraph<>(DefaultWeightedEdge.class);
+        OSMReader reader = new OSMReader();
+        reader.readGraph(graph, path, ShortestPathPerformance::greatCircleDistance);
+        System.out.println("graph read");
+
+
+        List<Pair<ShortestPathPerformance.Node, ShortestPathPerformance.Node>> queries = getQueries(graph);
+
+        ShortestPathAlgorithm<ShortestPathPerformance.Node, DefaultWeightedEdge> dijkstraShortestPaths =
+                new DijkstraShortestPath<>(graph);
+        Pair<Graph<ContractionHierarchyAlgorithm.ContractionVertex<ShortestPathPerformance.Node>,
+                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>>, Map<ShortestPathPerformance.Node,
+                ContractionHierarchyAlgorithm.ContractionVertex<ShortestPathPerformance.Node>>> p =
+                new ContractionHierarchyAlgorithm<>(
+                        graph,
+                        new PairingHeap<>(),
+                        () -> new Random(SEED), 1).computeContractionHierarchy();
+        ContractionHierarchyBidirectionalDijkstra<ShortestPathPerformance.Node, DefaultWeightedEdge> contractionDijkstra =
+                new ContractionHierarchyBidirectionalDijkstra<>(graph, p);
+        BidirectionalDijkstraShortestPath<ContractionHierarchyAlgorithm.ContractionVertex<ShortestPathPerformance.Node>,
+                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> bidirectionalDijkstra
+                = new BidirectionalDijkstraShortestPath<>(p.getFirst());
+        System.out.println("contraction built");
+
+        for (Pair<ShortestPathPerformance.Node, ShortestPathPerformance.Node> query : queries) {
+            ShortestPathPerformance.Node source = query.getFirst();
+            ShortestPathPerformance.Node target = query.getSecond();
+
+            System.out.println("regular dijkstra path");
+            unpack(
+                    bidirectionalDijkstra.getPath(
+                            p.getSecond().get(source),
+                            p.getSecond().get(target)
+                    ).getEdgeList(),
+                    p.getFirst());
+            System.out.println();
+
+            test(dijkstraShortestPaths, contractionDijkstra, source, target);
+        }
+    }
+
+    private void unpack(List<ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> edges,
+                        Graph<ContractionHierarchyAlgorithm.ContractionVertex<ShortestPathPerformance.Node>,
+                                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> graph) {
+        System.out.println("\n\nContraction indices\n\n");
+        for (ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge> e : edges) {
+            System.out.println(graph.getEdgeSource(e).contractionIndex > graph.getEdgeTarget(e).contractionIndex);
+        }
+        for (ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge> e : edges) {
+            unpack(e);
+        }
+    }
+
+    private void unpack(ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge> edge) {
+        if (edge.edge != null) {
+            System.out.print(edge.edge + ", ");
+        } else {
+            unpack(edge.skippedEdges.getFirst());
+            unpack(edge.skippedEdges.getSecond());
+        }
+    }
+
+    private void test(ShortestPathAlgorithm<ShortestPathPerformance.Node, DefaultWeightedEdge> expected,
+                      ShortestPathAlgorithm<ShortestPathPerformance.Node, DefaultWeightedEdge> actual,
+                      ShortestPathPerformance.Node source, ShortestPathPerformance.Node target) {
+        GraphPath<ShortestPathPerformance.Node, DefaultWeightedEdge> expectedPath = expected.getPath(source, target);
+        GraphPath<ShortestPathPerformance.Node, DefaultWeightedEdge> actualPath = actual.getPath(source, target);
+
+        if (actualPath == null) {
+            System.out.println("somehow path does not exist");
+            System.out.println("expected path" + expectedPath.getVertexList());
+            assertNull(expectedPath);
+        } else {
+            assertEquals(expectedPath.getWeight(), actualPath.getWeight(), 1e-19);
+        }
+    }
+
+    private List<Pair<ShortestPathPerformance.Node, ShortestPathPerformance.Node>> getQueries(
+            Graph<ShortestPathPerformance.Node, DefaultWeightedEdge> graph) {
+        int numOfQueries = 10;
+        Random random = new Random(SEED);
+
+        List<Pair<ShortestPathPerformance.Node, ShortestPathPerformance.Node>> queries = new ArrayList<>();
+        ShortestPathPerformance.Node[] nodes = graph.vertexSet().toArray(new ShortestPathPerformance.Node[0]);
+        for (int i = 0; i < numOfQueries; i++) {
+            int sourcePosition = random.nextInt(graph.vertexSet().size());
+            int targetPosition = random.nextInt(graph.vertexSet().size());
+            queries.add(Pair.of(nodes[sourcePosition], nodes[targetPosition]));
+        }
+        return queries;
     }
 
     private void test(Graph<Integer, DefaultWeightedEdge> graph, Integer source) {
@@ -205,8 +327,7 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
                                 new PairingHeap<>(),
                                 () -> new Random(SEED), 1).computeContractionHierarchy()
                 ).getPaths(source);
-
-        assertEqualPaths(dijkstraShortestPaths, contractionDijkstra, graph.vertexSet(), graph);
+        assertEqualPaths(dijkstraShortestPaths, contractionDijkstra, graph.vertexSet());
     }
 
     private Graph<Integer, DefaultWeightedEdge> generateRandomGraph(
@@ -228,8 +349,9 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
 
     private void makeConnected(Graph<Integer, DefaultWeightedEdge> graph) {
         Object[] vertices = graph.vertexSet().toArray();
-        for (int i = 0; i < vertices.length - 1; i++) {
+        for (int i = 0; i < vertices.length - 1; ++i) {
             graph.addEdge((Integer) vertices[i], (Integer) vertices[i + 1]);
+            graph.addEdge((Integer) vertices[i + 1], (Integer) vertices[i]);
         }
     }
 
@@ -242,11 +364,10 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
     private void assertEqualPaths(
             ShortestPathAlgorithm.SingleSourcePaths<Integer, DefaultWeightedEdge> expected,
             ShortestPathAlgorithm.SingleSourcePaths<Integer, DefaultWeightedEdge> actual,
-            Set<Integer> vertexSet,
-            Graph<Integer, DefaultWeightedEdge> graph) {
+            Set<Integer> vertexSet) {
         for (Integer sink : vertexSet) {
-            GraphPath<Integer, DefaultWeightedEdge> path1 = expected.getPath(sink);
-            GraphPath<Integer, DefaultWeightedEdge> path2 = actual.getPath(sink);
+            GraphPath<Integer, DefaultWeightedEdge> expectedPath = expected.getPath(sink);
+            GraphPath<Integer, DefaultWeightedEdge> actualPath = actual.getPath(sink);
 //            System.out.println("expected: " + path1);
 //            for (DefaultWeightedEdge edge : path1.getEdgeList()) {
 //                System.out.println(edge + " " + graph.getEdgeWeight(edge));
@@ -255,8 +376,10 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
 //            for (DefaultWeightedEdge edge : path2.getEdgeList()) {
 //                System.out.println(edge + " " + graph.getEdgeWeight(edge));
 //            }
-            if (path1 == null) {
-                assertNull(path2);
+            System.out.println("sink: "+ sink);
+            if (expectedPath == null || actualPath == null) {
+                System.out.println("path is null");
+                assertEquals(expectedPath, actualPath);
             } else {
                 assertEquals(
                         expected.getPath(sink).getWeight(), actual.getPath(sink).getWeight(), 1e-9);

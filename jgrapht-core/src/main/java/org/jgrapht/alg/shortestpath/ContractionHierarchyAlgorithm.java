@@ -6,6 +6,7 @@ import org.jgrapht.GraphType;
 import org.jgrapht.Graphs;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.jgrapht.alg.util.Pair;
+import org.jgrapht.graph.MaskSubgraph;
 import org.jgrapht.graph.builder.GraphTypeBuilder;
 import org.jheaps.AddressableHeap;
 import org.jheaps.tree.PairingHeap;
@@ -103,12 +104,11 @@ public class ContractionHierarchyAlgorithm<V, E> {
                 .weighted(true)
                 .allowingMultipleEdges(graph.getType().isAllowingMultipleEdges())
                 .allowingSelfLoops(false)
-//                .vertexClass((Class<ContractionVertex<V>>) (Class<?>) ContractionVertex.class)
-//                .edgeClass((Class<ContractionEdge<E>>) (Class<?>) ContractionEdge.class)
                 .buildGraph();
     }
 
     private void fillContractionGraphAndVerticesQueue() {
+//        System.out.println("filling contraction graph & vertices queue");
         for (V v : graph.vertexSet()) {
             ContractionVertex<V> vertex = new ContractionVertex<>(v);
 
@@ -129,12 +129,13 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private void computeInitialPriorities() {
+//        System.out.println("computing initial priorities");
 //        contractionGraph.vertexSet().forEach(vertex -> {
 //            Pair<VertexPriority, List<Pair<ContractionEdge<E>, ContractionEdge<E>>>> p
 //                    = getPriorityAndShortcuts(vertex, (int) (Math.random() * 10));
 //            vertexPriorityMap.put(vertex, p.getFirst());
 //            contractionQueue.insert(p.getFirst(), vertex);
-//            System.out.println(vertex.vertex + " " + p.getSecond().size() + " " + p.getFirst());
+////            System.out.println(vertex.vertex + " " + p.getSecond().size() + " " + p.getFirst());
 //        });
 
 //      submit tasks
@@ -183,28 +184,34 @@ public class ContractionHierarchyAlgorithm<V, E> {
                 contractionQueue.insert(updatedPriority, vertex);
             }
         }
+//        System.out.println("contraction index: " + contractionIndex + " " + graph.vertexSet().size());
     }
 
     private void contractVertex(ContractionVertex<V> vertex, int contractionIndex,
                                 List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts) {
-//        System.out.println(vertex.vertex);
+        System.out.println(vertex.vertex);
+//        System.out.println(contractionIndex);
+
         // add shortcuts
         for (Pair<ContractionEdge<E>, ContractionEdge<E>> shortcut : shortcuts) {
             ContractionVertex<V> shortcutSource = Graphs.getOppositeVertex(contractionGraph, shortcut.getFirst(), vertex);
             ContractionVertex<V> shortcutTarget = Graphs.getOppositeVertex(contractionGraph, shortcut.getSecond(), vertex);
             ContractionEdge<E> shortcutEdge = new ContractionEdge<>(shortcut);
 
+            System.out.println(shortcutSource.vertex + " " + shortcutTarget.vertex + " " +
+                    (contractionGraph.getEdgeWeight(shortcut.getFirst())
+                    + contractionGraph.getEdgeWeight(shortcut.getSecond())));
             contractionGraph.addEdge(shortcutSource, shortcutTarget, shortcutEdge);
             contractionGraph.setEdgeWeight(contractionGraph.getEdge(shortcutSource, shortcutTarget),
                     contractionGraph.getEdgeWeight(shortcut.getFirst())
                             + contractionGraph.getEdgeWeight(shortcut.getSecond()));
         }
 
-        // update vertex data
+        // update vertex datacontractionIndex
         vertex.contractionIndex = contractionIndex;
         vertex.contracted = true;
 
-        // update neighbors data
+        // update neighbors data --multi-graph unsafe--
         Graphs.successorListOf(contractionGraph, vertex).forEach(v -> ++v.neighborsContracted);
         Graphs.predecessorListOf(contractionGraph, vertex).forEach(v -> ++v.neighborsContracted);
     }
