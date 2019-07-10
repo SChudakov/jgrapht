@@ -92,7 +92,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private Graph<ContractionVertex<V>, ContractionEdge<E>> createContractionGraph() {
-        // to be able to mark upward edges correctly
         GraphType graphType = graph.getType();
         GraphTypeBuilder<ContractionVertex<V>, ContractionEdge<E>> resultBuilder;
 
@@ -112,7 +111,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private void fillContractionGraphAndVerticesQueue() {
-//        System.out.println("filling contraction graph & vertices queue");
         for (V v : graph.vertexSet()) {
             ContractionVertex<V> vertex = new ContractionVertex<>(v);
 
@@ -133,15 +131,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private void computeInitialPriorities() {
-//        System.out.println("computing initial priorities");
-//        contractionGraph.vertexSet().forEach(vertex -> {
-//            Pair<VertexPriority, List<Pair<ContractionEdge<E>, ContractionEdge<E>>>> p
-//                    = getPriorityAndShortcuts(vertex, (int) (Math.random() * 10));
-//            vertexPriorityMap.put(vertex, p.getFirst());
-//            contractionQueue.insert(p.getFirst(), vertex);
-////            System.out.println(vertex.vertex + " " + p.getSecond().size() + " " + p.getFirst());
-//        });
-
 //      submit tasks
         for (int i = 0; i < parallelism; ++i) {
             completionService.submit(new ContractionWorker(verticesQueue, randomSupplier.get()), null);
@@ -192,17 +181,12 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
     private void contractVertex(ContractionVertex<V> vertex, int contractionIndex,
                                 List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts) {
-//        System.out.println(vertex.vertex);
-
         // add shortcuts
         for (Pair<ContractionEdge<E>, ContractionEdge<E>> shortcut : shortcuts) {
             ContractionVertex<V> shortcutSource = Graphs.getOppositeVertex(contractionGraph, shortcut.getFirst(), vertex);
             ContractionVertex<V> shortcutTarget = Graphs.getOppositeVertex(contractionGraph, shortcut.getSecond(), vertex);
             ContractionEdge<E> shortcutEdge = new ContractionEdge<>(shortcut);
 
-//            System.out.println(shortcutSource.vertex + " " + shortcutTarget.vertex + " " +
-//                    (contractionGraph.getEdgeWeight(shortcut.getFirst())
-//                            + contractionGraph.getEdgeWeight(shortcut.getSecond())));
             contractionGraph.addEdge(shortcutSource, shortcutTarget, shortcutEdge);
             contractionGraph.setEdgeWeight(contractionGraph.getEdge(shortcutSource, shortcutTarget),
                     contractionGraph.getEdgeWeight(shortcut.getFirst())
@@ -217,16 +201,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         Graphs.successorListOf(contractionGraph, vertex).forEach(v -> ++v.neighborsContracted);
         Graphs.predecessorListOf(contractionGraph, vertex).forEach(v -> ++v.neighborsContracted);
     }
-
-//    private void markUpwardEdges() {
-//        contractionGraph.edgeSet().forEach(e -> e.upwardEdge =
-//                contractionGraph.getEdgeSource(e).contractionIndex < contractionGraph.getEdgeTarget(e).contractionIndex);
-//    }
-
-//    private void recomputeNeiborsPriorities(Graph<ContractionVertex<V1>, ContractionEdge<E1>> contractionGraph,
-//                                            ContractionVertex<V1> vertex) {
-//
-//    }
 
     private Pair<VertexPriority, List<Pair<ContractionEdge<E>, ContractionEdge<E>>>> getPriorityAndShortcuts(
             ContractionVertex<V> vertex, int random) {

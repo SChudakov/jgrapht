@@ -91,21 +91,15 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
         while (true) {
             if (frontier.heap.isEmpty()) {
                 frontier.isFinished = true;
-//                System.out.println("frontier empty");
             }
             if (otherFrontier.heap.isEmpty()) {
                 otherFrontier.isFinished = true;
-//                System.out.println("frontier empty");
             }
 
             // stopping condition for search
             if (frontier.isFinished && otherFrontier.isFinished) {
                 break;
-            } /*else if (!frontier.isFinished && !otherFrontier.isFinished) {
-                if (frontier.heap.findMin().getKey() + otherFrontier.heap.findMin().getKey() >= bestPath) {
-                    break;
-                }
-            }*/
+            }
 
             // stopping condition for current frontier
             if (frontier.heap.findMin().getKey() >= bestPath) {
@@ -166,7 +160,6 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
             return createPath(forwardFrontier, backwardFrontier,
                     bestPath, contractedSource, bestPathCommonVertex, contractedSink);
         } else {
-            System.out.println("here");
             return createEmptyPath(source, sink);
         }
     }

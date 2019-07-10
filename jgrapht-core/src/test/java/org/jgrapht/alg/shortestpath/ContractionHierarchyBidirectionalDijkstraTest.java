@@ -247,21 +247,10 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
         BidirectionalDijkstraShortestPath<ContractionHierarchyAlgorithm.ContractionVertex<ShortestPathPerformance.Node>,
                 ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> bidirectionalDijkstra
                 = new BidirectionalDijkstraShortestPath<>(p.getFirst());
-        System.out.println("contraction built");
 
         for (Pair<ShortestPathPerformance.Node, ShortestPathPerformance.Node> query : queries) {
-            System.out.println(query.getFirst() + " " + query.getSecond());
             ShortestPathPerformance.Node source = query.getFirst();
             ShortestPathPerformance.Node target = query.getSecond();
-
-//            System.out.println("regular dijkstra path");
-//            unpack(
-//                    bidirectionalDijkstra.getPath(
-//                            p.getSecond().get(source),
-//                            p.getSecond().get(target)
-//                    ).getEdgeList(),
-//                    p.getFirst());
-//            System.out.println();
 
             test(dijkstraShortestPaths, contractionDijkstra, source, target);
         }
@@ -295,14 +284,12 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
         GraphPath<ShortestPathPerformance.Node, DefaultWeightedEdge> actualPath = actual.getPath(source, target);
 
         if (actualPath == null) {
-            System.out.println("somehow path does not exist");
-            System.out.println("expected path" + expectedPath.getVertexList());
             assertNull(expectedPath);
         } else {
             List<Long> expectedIds = expectedPath.getVertexList().stream().mapToLong(v -> v.id).boxed().collect(Collectors.toList());
             List<Long> actualIds = actualPath.getVertexList().stream().mapToLong(v -> v.id).boxed().collect(Collectors.toList());
-            System.out.println("expected: " + expectedIds);
-            System.out.println("actual: " + actualIds);
+//            System.out.println("expected: " + expectedIds);
+//            System.out.println("actual: " + actualIds);
             assertEquals(expectedIds, actualIds);
             assertEquals(expectedPath.getWeight(), actualPath.getWeight(), 1e-9);
         }
