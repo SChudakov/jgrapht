@@ -33,6 +33,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
     private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
     private Map<V, ContractionVertex<V>> contractionMapping;
+    private Graph<ContractionVertex<V>, ContractionEdge<E>> maskedContractionGraph;
 
     private AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue;
     private Map<ContractionVertex<V>, VertexPriority> vertexPriorityMap;
@@ -69,6 +70,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
         this.contractionQueue = contractionQueue;
         this.parallelism = parallelism;
         this.contractionGraph = createContractionGraph();
+        this.maskedContractionGraph = new MaskSubgraph<>(contractionGraph,
+                v -> v.contracted,
+                e -> contractionGraph.getEdgeSource(e).contracted || contractionGraph.getEdgeTarget(e).contracted);
         this.randomSupplier = randomSupplier;
 
         contractionMapping = new HashMap<>();
@@ -184,13 +188,11 @@ public class ContractionHierarchyAlgorithm<V, E> {
                 contractionQueue.insert(updatedPriority, vertex);
             }
         }
-//        System.out.println("contraction index: " + contractionIndex + " " + graph.vertexSet().size());
     }
 
     private void contractVertex(ContractionVertex<V> vertex, int contractionIndex,
                                 List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts) {
-        System.out.println(vertex.vertex);
-//        System.out.println(contractionIndex);
+//        System.out.println(vertex.vertex);
 
         // add shortcuts
         for (Pair<ContractionEdge<E>, ContractionEdge<E>> shortcut : shortcuts) {
@@ -198,16 +200,16 @@ public class ContractionHierarchyAlgorithm<V, E> {
             ContractionVertex<V> shortcutTarget = Graphs.getOppositeVertex(contractionGraph, shortcut.getSecond(), vertex);
             ContractionEdge<E> shortcutEdge = new ContractionEdge<>(shortcut);
 
-            System.out.println(shortcutSource.vertex + " " + shortcutTarget.vertex + " " +
-                    (contractionGraph.getEdgeWeight(shortcut.getFirst())
-                    + contractionGraph.getEdgeWeight(shortcut.getSecond())));
+//            System.out.println(shortcutSource.vertex + " " + shortcutTarget.vertex + " " +
+//                    (contractionGraph.getEdgeWeight(shortcut.getFirst())
+//                            + contractionGraph.getEdgeWeight(shortcut.getSecond())));
             contractionGraph.addEdge(shortcutSource, shortcutTarget, shortcutEdge);
             contractionGraph.setEdgeWeight(contractionGraph.getEdge(shortcutSource, shortcutTarget),
                     contractionGraph.getEdgeWeight(shortcut.getFirst())
                             + contractionGraph.getEdgeWeight(shortcut.getSecond()));
         }
 
-        // update vertex datacontractionIndex
+        // update vertex data
         vertex.contractionIndex = contractionIndex;
         vertex.contracted = true;
 
@@ -240,9 +242,10 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
 
     private int getEdgeRemovedCount(ContractionVertex<V> vertex) {
-        int result = (int) Graphs.successorListOf(contractionGraph, vertex).stream().filter(v -> !v.contracted).count();
+        // --multi-graph usage--
+        int result = Graphs.successorListOf(maskedContractionGraph, vertex).size();
         if (graph.getType().isDirected()) {
-            result += Graphs.predecessorListOf(contractionGraph, vertex).stream().filter(v -> !v.contracted).count();
+            result += Graphs.predecessorListOf(maskedContractionGraph, vertex).size();
         }
         return result;
     }
@@ -253,40 +256,37 @@ public class ContractionHierarchyAlgorithm<V, E> {
         Set<ContractionVertex<V>> successors = new HashSet<>();
 
         double maxOutgoingEdgeWeight = Double.MIN_VALUE;
-        for (ContractionEdge<E> outEdge : contractionGraph.outgoingEdgesOf(vertex)) {
-            ContractionVertex<V> successor = Graphs.getOppositeVertex(contractionGraph, outEdge, vertex);
-            if (!successor.contracted) { // do not consider contracted vertices
-                successors.add(successor);
-                maxOutgoingEdgeWeight = Math.max(maxOutgoingEdgeWeight, contractionGraph.getEdgeWeight(outEdge));
-            }
+        for (ContractionEdge<E> outEdge : maskedContractionGraph.outgoingEdgesOf(vertex)) {
+            ContractionVertex<V> successor = Graphs.getOppositeVertex(maskedContractionGraph, outEdge, vertex);
+            successors.add(successor);
+            maxOutgoingEdgeWeight = Math.max(maxOutgoingEdgeWeight, maskedContractionGraph.getEdgeWeight(outEdge));
         }
 
 
-        for (ContractionEdge<E> inEdge : contractionGraph.incomingEdgesOf(vertex)) {
-            ContractionVertex<V> predecessor = Graphs.getOppositeVertex(contractionGraph, inEdge, vertex);
-            if (!predecessor.contracted) { // do not consider contracted vertices
-                DijkstraClosestFirstIterator<ContractionVertex<V>, ContractionEdge<E>> it =
-                        new DijkstraClosestFirstIterator<>(
-                                contractionGraph,
-                                predecessor,
-                                contractionGraph.getEdgeWeight(inEdge) + maxOutgoingEdgeWeight);
+        for (ContractionEdge<E> inEdge : maskedContractionGraph.incomingEdgesOf(vertex)) {
+            ContractionVertex<V> predecessor = Graphs.getOppositeVertex(maskedContractionGraph, inEdge, vertex);
 
-                boolean containedPredecessor = successors.remove(predecessor); // might contain the predecessor vertex itself
-                iterateToSuccessors(it, successors);
-                ShortestPathAlgorithm.SingleSourcePaths<ContractionVertex<V>, ContractionEdge<E>> ssp = it.getPaths();
+            DijkstraClosestFirstIterator<ContractionVertex<V>, ContractionEdge<E>> it =
+                    new DijkstraClosestFirstIterator<>(
+                            maskedContractionGraph,
+                            predecessor,
+                            maskedContractionGraph.getEdgeWeight(inEdge) + maxOutgoingEdgeWeight);
 
-                for (ContractionVertex<V> successor : successors) {
-                    GraphPath<ContractionVertex<V>, ContractionEdge<E>> successorPath = ssp.getPath(successor);
-                    if (successorPath != null
-                            && successorPath.getLength() == 2
-                            && successorPath.getVertexList().get(1).equals(vertex)) {
-                        List<ContractionEdge<E>> pathEdges = successorPath.getEdgeList();
-                        shortcuts.add(Pair.of(pathEdges.get(0), pathEdges.get(1)));
-                    }
+            boolean containedPredecessor = successors.remove(predecessor); // might contain the predecessor vertex itself
+            iterateToSuccessors(it, successors);
+            ShortestPathAlgorithm.SingleSourcePaths<ContractionVertex<V>, ContractionEdge<E>> ssp = it.getPaths();
+
+            for (ContractionVertex<V> successor : successors) {
+                GraphPath<ContractionVertex<V>, ContractionEdge<E>> successorPath = ssp.getPath(successor);
+                if (successorPath != null
+                        && successorPath.getLength() == 2
+                        && successorPath.getVertexList().get(1).equals(vertex)) {
+                    List<ContractionEdge<E>> pathEdges = successorPath.getEdgeList();
+                    shortcuts.add(Pair.of(pathEdges.get(0), pathEdges.get(1)));
                 }
-                if (containedPredecessor && graph.getType().isDirected()) {
-                    successors.add(predecessor);
-                }
+            }
+            if (containedPredecessor && graph.getType().isDirected()) {
+                successors.add(predecessor);
             }
         }
 
