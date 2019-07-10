@@ -41,7 +41,7 @@ import java.util.function.*;
 public class DijkstraShortestPathPerformanceTest
 {
     private static final int PERF_BENCHMARK_VERTICES_COUNT = 250;
-    private static final double PERF_BENCHMARK_EDGES_PROP = 0.3;
+    private static final double PERF_BENCHMARK_EDGES_PROP = 0.02;
     private static final int WARMUP_REPEAT = 5;
     private static final int REPEAT = 10;
     private static final long SEED = 13l;
@@ -77,10 +77,8 @@ public class DijkstraShortestPathPerformanceTest
 
         public void run()
         {
-//            int i = 0;
             for (Integer v : graph.vertexSet()) {
                 for (Integer u : graph.vertexSet()) {
-//                    System.out.println(i++);
                     algorithm.getPath(v, u);
                 }
             }
@@ -293,6 +291,11 @@ public class DijkstraShortestPathPerformanceTest
         void createSolver() {
             algorithm = new ContractionHierarchyBidirectionalDijkstra<>(graph);
         }
+
+        @Override
+        public String toString() {
+            return "Contraction Hierarchy Algorithm";
+        }
     }
 
     @Test
@@ -307,16 +310,16 @@ public class DijkstraShortestPathPerformanceTest
         System.out.println("Averaging results over " + REPEAT + " executions");
 
         List<Supplier<BenchmarkBase>> algFactory = new ArrayList<>();
-//        algFactory.add(() -> new ClosestFirstIteratorBenchmark());
-//        algFactory.add(() -> new DijkstraBenchmark());
-//        algFactory.add(() -> new AStarNoHeuristicBenchmark());
-//        algFactory.add(() -> new AStarALTBenchmark(1));
-//        algFactory.add(() -> new AStarALTBenchmark(5));
-//        algFactory.add(() -> new BidirectionalDijkstraBenchmark());
-//        algFactory.add(() -> new BFSShortestPathBenchmark());
-//        algFactory.add(() -> new BidirectionalAStarALTBenchmark(1));
-//        algFactory.add(() -> new BidirectionalAStarALTBenchmark(5));
-//        algFactory.add(() -> new BidirectionalAStarNoHeuristicBenchmark());
+        algFactory.add(() -> new ClosestFirstIteratorBenchmark());
+        algFactory.add(() -> new DijkstraBenchmark());
+        algFactory.add(() -> new AStarNoHeuristicBenchmark());
+        algFactory.add(() -> new AStarALTBenchmark(1));
+        algFactory.add(() -> new AStarALTBenchmark(5));
+        algFactory.add(() -> new BidirectionalDijkstraBenchmark());
+        algFactory.add(() -> new BFSShortestPathBenchmark());
+        algFactory.add(() -> new BidirectionalAStarALTBenchmark(1));
+        algFactory.add(() -> new BidirectionalAStarALTBenchmark(5));
+        algFactory.add(() -> new BidirectionalAStarNoHeuristicBenchmark());
         algFactory.add(() -> new ContractionHierarchyBenchmark());
 
         for (Supplier<BenchmarkBase> alg : algFactory) {
@@ -328,9 +331,8 @@ public class DijkstraShortestPathPerformanceTest
             System.out.printf("%-50s :", benchmark.toString());
 
             for (int i = 0; i < WARMUP_REPEAT; i++) {
-                System.out.println(i);
-                System.out.flush();
                 System.out.print("-");
+                System.out.flush();
                 benchmark.setup();
                 benchmark.createSolver();
                 benchmark.run();
@@ -339,9 +341,8 @@ public class DijkstraShortestPathPerformanceTest
             double avgPrecompute = 0d;
             double avgExecution = 0d;
             for (int i = 0; i < REPEAT; i++) {
-                System.out.println(i);
-                System.out.flush();
                 System.out.print("+");
+                System.out.flush();
                 watch.start();
                 benchmark.setup();
                 avgGraphCreate += watch.getElapsed(TimeUnit.MILLISECONDS);
