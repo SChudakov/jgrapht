@@ -10,6 +10,7 @@ import org.jheaps.AddressableHeap;
 import org.jheaps.tree.PairingHeap;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -35,7 +36,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private Graph<ContractionVertex<V>, ContractionEdge<E>> maskedContractionGraph;
 
     private AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue;
-    private Map<ContractionVertex<V>, VertexPriority> vertexPriorityMap;
+    private Map<ContractionVertex<V>, VertexPriority> prioritiesMap;
 
     private Queue<ContractionVertex<V>> verticesQueue;
 
@@ -76,7 +77,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
         contractionMapping = new HashMap<>();
         verticesQueue = new ConcurrentLinkedQueue<>();
-        vertexPriorityMap = new ConcurrentHashMap<>();
+        prioritiesMap = new ConcurrentHashMap<>(graph.vertexSet().size());
         executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         completionService = new ExecutorCompletionService<>(executor);
     }
@@ -132,7 +133,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private void computeInitialPriorities() {
 //        contractionGraph.vertexSet().forEach(vertex -> {
 //            VertexPriority priority = getPriority(vertex, (int) (Math.random() * 1000000));
-//            vertexPriorityMap.put(vertex, priority);
+//            prioritiesMap.put(vertex, priority);
 //            contractionQueue.insert(priority, vertex);
 ////            System.out.println(vertex.vertex + " " + p.getSecond().size() + " " + p.getFirst());
 //        });
@@ -158,7 +159,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
             e.printStackTrace();
         }
 
-        for (Map.Entry<ContractionVertex<V>, VertexPriority> entry : vertexPriorityMap.entrySet()) {
+        for (Map.Entry<ContractionVertex<V>, VertexPriority> entry : prioritiesMap.entrySet()) {
             contractionQueue.insert(entry.getValue(), entry.getKey());
         }
     }
@@ -199,13 +200,18 @@ public class ContractionHierarchyAlgorithm<V, E> {
                             + contractionGraph.getEdgeWeight(shortcut.getSecond()));
         }
 
+        // update neighbors data --multi-graph unsafe--
+        Collection<ContractionVertex<V>> neighbours;
+        if (graph.getType().isSimple()) {
+            neighbours = Graphs.successorListOf(maskedContractionGraph, vertex);
+        } else {
+            neighbours = Graphs.neighborSetOf(maskedContractionGraph, vertex);
+        }
+        neighbours.forEach(v -> ++v.neighborsContracted);
+
         // update vertex data
         vertex.contractionIndex = contractionIndex;
         vertex.contracted = true;
-
-        // update neighbors data --multi-graph unsafe--
-        Graphs.successorListOf(contractionGraph, vertex).forEach(v -> ++v.neighborsContracted);
-        Graphs.predecessorListOf(contractionGraph, vertex).forEach(v -> ++v.neighborsContracted);
     }
 
 
@@ -363,7 +369,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
 
-
     private class ToListConsumer implements BiConsumer<ContractionEdge<E>, ContractionEdge<E>> {
         List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts;
 
@@ -447,7 +452,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
         public void run() {
             ContractionVertex<V> vertex = verticesQueue.poll();
             while (vertex != null) {
-                vertexPriorityMap.put(vertex, getPriority(vertex, random.nextInt()));
+                prioritiesMap.put(vertex, getPriority(vertex, random.nextInt()));
                 vertex = verticesQueue.poll();
             }
         }
