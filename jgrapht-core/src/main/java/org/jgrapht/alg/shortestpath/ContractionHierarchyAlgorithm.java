@@ -36,7 +36,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private Graph<ContractionVertex<V>, ContractionEdge<E>> maskedContractionGraph;
 
     private AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue;
-    private Map<ContractionVertex<V>, VertexPriority> prioritiesMap;
+    private Pair[] prioritiesArray;
 
     private Queue<ContractionVertex<V>> verticesQueue;
 
@@ -77,7 +77,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
         contractionMapping = new HashMap<>();
         verticesQueue = new ConcurrentLinkedQueue<>();
-        prioritiesMap = new ConcurrentHashMap<>(graph.vertexSet().size());
+        prioritiesArray = new Pair[graph.vertexSet().size()];
         executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         completionService = new ExecutorCompletionService<>(executor);
     }
@@ -111,8 +111,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private void fillContractionGraphAndVerticesQueue() {
+        int vertexIndex = 0;
         for (V v : graph.vertexSet()) {
-            ContractionVertex<V> vertex = new ContractionVertex<>(v);
+            ContractionVertex<V> vertex = new ContractionVertex<>(v, vertexIndex++);
 
             contractionGraph.addVertex(vertex);
             contractionMapping.put(v, vertex);
@@ -133,7 +134,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private void computeInitialPriorities() {
 //        contractionGraph.vertexSet().forEach(vertex -> {
 //            VertexPriority priority = getPriority(vertex, (int) (Math.random() * 1000000));
-//            prioritiesMap.put(vertex, priority);
+//            prioritiesArray.put(vertex, priority);
 //            contractionQueue.insert(priority, vertex);
 ////            System.out.println(vertex.vertex + " " + p.getSecond().size() + " " + p.getFirst());
 //        });
@@ -159,8 +160,8 @@ public class ContractionHierarchyAlgorithm<V, E> {
             e.printStackTrace();
         }
 
-        for (Map.Entry<ContractionVertex<V>, VertexPriority> entry : prioritiesMap.entrySet()) {
-            contractionQueue.insert(entry.getValue(), entry.getKey());
+        for (Pair p : prioritiesArray) {
+            contractionQueue.insert((VertexPriority) p.getSecond(),(ContractionVertex<V>) p.getFirst());
         }
     }
 
@@ -398,6 +399,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
     public static class ContractionVertex<V1> {
         V1 vertex;
+        int index;
         int contractionIndex;
         int neighborsContracted;
         boolean contracted;
@@ -412,7 +414,8 @@ public class ContractionHierarchyAlgorithm<V, E> {
                     '}';
         }
 
-        public ContractionVertex(V1 vertex) {
+        public ContractionVertex(V1 vertex, int index) {
+            this.index = index;
             this.vertex = vertex;
         }
     }
@@ -452,7 +455,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
         public void run() {
             ContractionVertex<V> vertex = verticesQueue.poll();
             while (vertex != null) {
-                prioritiesMap.put(vertex, getPriority(vertex, random.nextInt()));
+                prioritiesArray[vertex.index] = Pair.of(vertex, getPriority(vertex, random.nextInt()));
                 vertex = verticesQueue.poll();
             }
         }
