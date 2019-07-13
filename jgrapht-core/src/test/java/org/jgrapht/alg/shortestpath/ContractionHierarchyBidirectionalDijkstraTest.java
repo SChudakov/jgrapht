@@ -228,8 +228,6 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
                 = new SimpleDirectedWeightedGraph<>(DefaultWeightedEdge.class);
         OSMReader reader = new OSMReader();
         reader.readGraph(graph, path, ShortestPathPerformance::greatCircleDistance);
-        System.out.println("graph read");
-
 
         List<Pair<ShortestPathPerformance.Node, ShortestPathPerformance.Node>> queries = getQueries(graph);
 
