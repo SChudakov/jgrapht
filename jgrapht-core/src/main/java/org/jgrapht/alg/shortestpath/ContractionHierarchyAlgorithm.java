@@ -16,11 +16,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Queue;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -36,9 +33,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private Graph<ContractionVertex<V>, ContractionEdge<E>> maskedContractionGraph;
 
     private AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue;
-    private Pair[] prioritiesArray;
 
-    private Queue<ContractionVertex<V>> verticesQueue;
+    private Object[] verticesArray;
+    private VertexPriority[] prioritiesArray;
 
     private ExecutorService executor;
     private ExecutorCompletionService<Void> completionService;
@@ -75,9 +72,10 @@ public class ContractionHierarchyAlgorithm<V, E> {
                 e -> contractionGraph.getEdgeSource(e).contracted || contractionGraph.getEdgeTarget(e).contracted);
         this.randomSupplier = randomSupplier;
 
+        verticesArray = new Object[graph.vertexSet().size()];
+
         contractionMapping = new HashMap<>();
-        verticesQueue = new ConcurrentLinkedQueue<>();
-        prioritiesArray = new Pair[graph.vertexSet().size()];
+        prioritiesArray = new VertexPriority[graph.vertexSet().size()];
         executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         completionService = new ExecutorCompletionService<>(executor);
     }
@@ -112,12 +110,12 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
     private void fillContractionGraphAndVerticesQueue() {
         int vertexIndex = 0;
-        for (V v : graph.vertexSet()) {
-            ContractionVertex<V> vertex = new ContractionVertex<>(v, vertexIndex++);
-
-            contractionGraph.addVertex(vertex);
-            contractionMapping.put(v, vertex);
-            verticesQueue.add(vertex);
+        for (V vertex : graph.vertexSet()) {
+            ContractionVertex<V> contractionVertex = new ContractionVertex<>(vertex, vertexIndex);
+            verticesArray[vertexIndex] = contractionVertex;
+            ++vertexIndex;
+            contractionGraph.addVertex(contractionVertex);
+            contractionMapping.put(vertex, contractionVertex);
         }
 
         for (E e : graph.edgeSet()) {
@@ -141,7 +139,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
 //      submit tasks
         for (int i = 0; i < parallelism; ++i) {
-            completionService.submit(new ContractionWorker(verticesQueue, randomSupplier.get()), null);
+            completionService.submit(new ContractionWorker(i, randomSupplier.get()), null);
         }
 //      take tasks
         for (int i = 0; i < parallelism; ++i) {
@@ -160,8 +158,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
             e.printStackTrace();
         }
 
-        for (Pair p : prioritiesArray) {
-            contractionQueue.insert((VertexPriority) p.getSecond(),(ContractionVertex<V>) p.getFirst());
+        int n = graph.vertexSet().size();
+        for (int vertexIndex = 0; vertexIndex < n; ++vertexIndex) {
+            contractionQueue.insert(prioritiesArray[vertexIndex], (ContractionVertex<V>) verticesArray[vertexIndex]);
         }
     }
 
@@ -443,25 +442,26 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
     private class ContractionWorker implements Runnable {
 
-        private Queue<ContractionVertex<V>> verticesQueue;
+        private int workerIndex;
         private Random random;
 
-        ContractionWorker(Queue<ContractionVertex<V>> verticesQueue, Random random) {
-            this.verticesQueue = verticesQueue;
+        ContractionWorker(int workerIndex, Random random) {
+            this.workerIndex = workerIndex;
             this.random = random;
         }
 
         @Override
         public void run() {
-            ContractionVertex<V> vertex = verticesQueue.poll();
-            while (vertex != null) {
-                prioritiesArray[vertex.index] = Pair.of(vertex, getPriority(vertex, random.nextInt()));
-                vertex = verticesQueue.poll();
+            int start = (graph.vertexSet().size() * workerIndex) / parallelism;
+            int end = (graph.vertexSet().size() * (workerIndex + 1)) / parallelism;
+            for (int vertexIndex = start; vertexIndex < end; ++vertexIndex) {
+                ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
+                prioritiesArray[vertexIndex] = getPriority(vertex, random.nextInt());
             }
         }
     }
 
-    private class VertexPriority implements Comparable<VertexPriority> {
+    private static class VertexPriority implements Comparable<VertexPriority> {
         int edgeDifference;
         int neighborsContracted;
         int random;
