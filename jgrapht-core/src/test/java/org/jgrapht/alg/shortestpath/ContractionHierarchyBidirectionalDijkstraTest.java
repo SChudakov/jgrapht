@@ -9,19 +9,17 @@ import org.jgrapht.generate.GnmRandomGraphGenerator;
 import org.jgrapht.generate.GraphGenerator;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.DirectedWeightedPseudograph;
-import org.jgrapht.graph.SimpleDirectedWeightedGraph;
 import org.jgrapht.graph.SimpleWeightedGraph;
 import org.jgrapht.util.SupplierUtil;
 import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
+import static org.jgrapht.alg.shortestpath.ContractionHierarchyAlgorithm.ContractionVertex;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -134,14 +132,16 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
     }
 
     private void test(Graph<Integer, DefaultWeightedEdge> graph, Integer source) {
-        ShortestPathAlgorithm.SingleSourcePaths<Integer,
-                DefaultWeightedEdge> dijkstraShortestPaths =
+        ShortestPathAlgorithm.SingleSourcePaths<Integer, DefaultWeightedEdge> dijkstraShortestPaths =
                 new DijkstraShortestPath<>(graph).getPaths(source);
+
+        Pair<Graph<ContractionVertex<Integer>, ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>>,
+                Map<Integer, ContractionVertex<Integer>>> p
+                = new ContractionHierarchyAlgorithm<>(graph, () -> new Random(SEED)).computeContractionHierarchy();
+
         ShortestPathAlgorithm.SingleSourcePaths<Integer, DefaultWeightedEdge> contractionDijkstra =
-                new ContractionHierarchyBidirectionalDijkstra<>(graph,
-                        new ContractionHierarchyAlgorithm<>(
-                                graph, () -> new Random(SEED)).computeContractionHierarchy()
-                ).getPaths(source);
+                new ContractionHierarchyBidirectionalDijkstra<>(graph, p.getFirst(), p.getSecond()).getPaths(source);
+
         assertEqualPaths(dijkstraShortestPaths, contractionDijkstra, graph.vertexSet());
     }
 
@@ -183,7 +183,7 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
         for (Integer sink : vertexSet) {
             GraphPath<Integer, DefaultWeightedEdge> expectedPath = expected.getPath(sink);
             GraphPath<Integer, DefaultWeightedEdge> actualPath = actual.getPath(sink);
-            if (expectedPath == null ) {
+            if (expectedPath == null) {
                 assertNull(actualPath);
             } else {
                 assertEquals(

@@ -58,7 +58,7 @@ public abstract class BaseBidirectionalShortestPathAlgorithm<V, E>
      * @return shortest path between source and sink
      */
     protected GraphPath<V, E> createPath(
-        BaseSearchFrontier<V,E> forwardFrontier, BaseSearchFrontier<V,E> backwardFrontier, double weight,
+        BaseSearchFrontier<V, E> forwardFrontier, BaseSearchFrontier<V, E> backwardFrontier, double weight,
         V source, V commonVertex, V sink)
     {
         LinkedList<E> edgeList = new LinkedList<>();

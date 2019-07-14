@@ -14,7 +14,8 @@ import java.util.Random;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-
+import static org.jgrapht.alg.shortestpath.ContractionHierarchyAlgorithm.ContractionEdge;
+import static org.jgrapht.alg.shortestpath.ContractionHierarchyAlgorithm.ContractionVertex;
 
 public class ContractionHierarchyAlgorithmTest {
     private static final long SEED = 19L;
@@ -24,17 +25,14 @@ public class ContractionHierarchyAlgorithmTest {
         Graph<Integer, DefaultWeightedEdge> graph = new SimpleDirectedWeightedGraph<>(DefaultWeightedEdge.class);
         ContractionHierarchyAlgorithm<Integer, DefaultWeightedEdge> contractor
                 = new ContractionHierarchyAlgorithm<>(graph, () -> new Random(SEED));
-        Pair<Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>>,
-                Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>>> p
-                = contractor.computeContractionHierarchy();
+        Pair<Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>>,
+                Map<Integer, ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
 
         assertNotNull(p);
 
 
-        Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
-        Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>> contractionMapping = p.getSecond();
+        Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
+        Map<Integer, ContractionVertex<Integer>> contractionMapping = p.getSecond();
 
 
         assertNotNull(contractionGraph);
@@ -54,24 +52,20 @@ public class ContractionHierarchyAlgorithmTest {
 
         ContractionHierarchyAlgorithm<Integer, DefaultWeightedEdge> contractor
                 = new ContractionHierarchyAlgorithm<>(graph, () -> new Random(SEED));
-        Pair<Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>>,
-                Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>>> p
-                = contractor.computeContractionHierarchy();
+        Pair<Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>>,
+                Map<Integer, ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
 
         assertNotNull(p);
 
-        Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
-        Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>> contractionMapping = p.getSecond();
+        Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
+        Map<Integer, ContractionVertex<Integer>> contractionMapping = p.getSecond();
 
         assertEquals(3, contractionGraph.vertexSet().size());
 
         if (contractionMapping.get(2).contractionIndex == 0) {
             assertEquals(3, contractionGraph.edgeSet().size());
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(3)));
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(1), contractionMapping.get(3))), 1e-9);
         } else {
             assertEquals(2, contractionGraph.edgeSet().size());
@@ -89,16 +83,13 @@ public class ContractionHierarchyAlgorithmTest {
 
         ContractionHierarchyAlgorithm<Integer, DefaultWeightedEdge> contractor
                 = new ContractionHierarchyAlgorithm<>(graph, () -> new Random(SEED));
-        Pair<Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>>,
-                Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>>> p
-                = contractor.computeContractionHierarchy();
+        Pair<Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>>,
+                Map<Integer, ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
 
         assertNotNull(p);
 
-        Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
-        Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>> contractionMapping = p.getSecond();
+        Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
+        Map<Integer, ContractionVertex<Integer>> contractionMapping = p.getSecond();
 
         assertEquals(3, graph.vertexSet().size());
 
@@ -106,11 +97,9 @@ public class ContractionHierarchyAlgorithmTest {
             assertEquals(6, contractionGraph.edgeSet().size());
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(3)));
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(3), contractionMapping.get(1)));
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(1), contractionMapping.get(3))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(3), contractionMapping.get(1))), 1e-9);
         } else {
             assertEquals(4, contractionGraph.edgeSet().size());
@@ -129,16 +118,13 @@ public class ContractionHierarchyAlgorithmTest {
 
         ContractionHierarchyAlgorithm<Integer, DefaultWeightedEdge> contractor
                 = new ContractionHierarchyAlgorithm<>(graph, () -> new Random(SEED));
-        Pair<Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>>,
-                Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>>> p
-                = contractor.computeContractionHierarchy();
+        Pair<Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>>,
+                Map<Integer, ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
 
         assertNotNull(p);
 
-        Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
-        Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>> contractionMapping = p.getSecond();
+        Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
+        Map<Integer, ContractionVertex<Integer>> contractionMapping = p.getSecond();
 
         assertEquals(5, graph.vertexSet().size());
 
@@ -148,17 +134,13 @@ public class ContractionHierarchyAlgorithmTest {
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(7)));
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(2), contractionMapping.get(6)));
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(2), contractionMapping.get(7)));
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(1), contractionMapping.get(6))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(1), contractionMapping.get(7))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(2), contractionMapping.get(6))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(2), contractionMapping.get(7))), 1e-9);
         } else {
             assertEquals(4, contractionGraph.edgeSet().size());
@@ -181,16 +163,13 @@ public class ContractionHierarchyAlgorithmTest {
 
         ContractionHierarchyAlgorithm<Integer, DefaultWeightedEdge> contractor
                 = new ContractionHierarchyAlgorithm<>(graph, () -> new Random(SEED));
-        Pair<Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>>,
-                Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>>> p
-                = contractor.computeContractionHierarchy();
+        Pair<Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>>,
+                Map<Integer, ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
 
         assertNotNull(p);
 
-        Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
-        Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>> contractionMapping = p.getSecond();
+        Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
+        Map<Integer, ContractionVertex<Integer>> contractionMapping = p.getSecond();
 
         assertEquals(5, graph.vertexSet().size());
 
@@ -212,46 +191,34 @@ public class ContractionHierarchyAlgorithmTest {
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(7), contractionMapping.get(2)));
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(7), contractionMapping.get(6)));
 
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(1), contractionMapping.get(2))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(1), contractionMapping.get(6))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(1), contractionMapping.get(7))), 1e-9);
 
 
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(2), contractionMapping.get(1))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(2), contractionMapping.get(6))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(2), contractionMapping.get(7))), 1e-9);
 
 
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(6), contractionMapping.get(1))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(6), contractionMapping.get(2))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(6), contractionMapping.get(7))), 1e-9);
 
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(7), contractionMapping.get(1))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(7), contractionMapping.get(2))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(7), contractionMapping.get(6))), 1e-9);
         } else {
             assertEquals(8, contractionGraph.edgeSet().size());
@@ -267,24 +234,20 @@ public class ContractionHierarchyAlgorithmTest {
 
         ContractionHierarchyAlgorithm<Integer, DefaultWeightedEdge> contractor
                 = new ContractionHierarchyAlgorithm<>(graph, () -> new Random(SEED));
-        Pair<Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>>,
-                Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>>> p
-                = contractor.computeContractionHierarchy();
+        Pair<Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>>,
+                Map<Integer, ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
 
         assertNotNull(p);
 
-        Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
-        Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>> contractionMapping = p.getSecond();
+        Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
+        Map<Integer, ContractionVertex<Integer>> contractionMapping = p.getSecond();
 
         assertEquals(3, graph.vertexSet().size());
 
         if (contractionMapping.get(2).contractionIndex == 0) {
             assertEquals(6, contractionGraph.edgeSet().size());
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(3)));
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(1), contractionMapping.get(3))), 1e-9);
         } else {
             assertEquals(4, contractionGraph.edgeSet().size());
@@ -303,16 +266,13 @@ public class ContractionHierarchyAlgorithmTest {
 
         ContractionHierarchyAlgorithm<Integer, DefaultWeightedEdge> contractor
                 = new ContractionHierarchyAlgorithm<>(graph, () -> new Random(SEED));
-        Pair<Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>>,
-                Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>>> p
-                = contractor.computeContractionHierarchy();
+        Pair<Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>>,
+                Map<Integer, ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
 
         assertNotNull(p);
 
-        Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
-        Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>> contractionMapping = p.getSecond();
+        Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
+        Map<Integer, ContractionVertex<Integer>> contractionMapping = p.getSecond();
 
         assertEquals(5, graph.vertexSet().size());
 
@@ -326,25 +286,19 @@ public class ContractionHierarchyAlgorithmTest {
 
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(6), contractionMapping.get(7)));
 
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(1), contractionMapping.get(2))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(1), contractionMapping.get(6))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(1), contractionMapping.get(7))), 1e-9);
 
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(2), contractionMapping.get(6))), 1e-9);
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(1), contractionMapping.get(7))), 1e-9);
 
-            assertEquals(2.0, contractionGraph.getEdgeWeight(
-                    contractionGraph.getEdge(
+            assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
                             contractionMapping.get(6), contractionMapping.get(7))), 1e-9);
         } else {
             assertEquals(8, contractionGraph.edgeSet().size());
@@ -376,15 +330,12 @@ public class ContractionHierarchyAlgorithmTest {
 
         ContractionHierarchyAlgorithm<Integer, DefaultWeightedEdge> contractor
                 = new ContractionHierarchyAlgorithm<>(graph, () -> new Random(SEED));
-        Pair<Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>>,
-                Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>>> p
-                = contractor.computeContractionHierarchy();
+        Pair<Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>>,
+                Map<Integer, ContractionVertex<Integer>>> p = contractor.computeContractionHierarchy();
 
         assertNotNull(p);
 
-        Graph<ContractionHierarchyAlgorithm.ContractionVertex<Integer>,
-                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
+        Graph<ContractionVertex<Integer>, ContractionEdge<DefaultWeightedEdge>> contractionGraph = p.getFirst();
 
         assertEquals(9, graph.vertexSet().size());
         assertEquals(24, contractionGraph.edgeSet().size());

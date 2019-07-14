@@ -55,17 +55,16 @@ public class ContractionHierarchyAlgorithm<V, E> {
         this(graph, Runtime.getRuntime().availableProcessors(), randomSupplier, PairingHeap::new, PairingHeap::new);
     }
 
-    public ContractionHierarchyAlgorithm(Graph<V, E> graph,
-                                         int parallelism,
+    public ContractionHierarchyAlgorithm(Graph<V, E> graph, int parallelism,
                                          Supplier<Random> randomSupplier,
                                          Supplier<AddressableHeap<VertexPriority, ContractionVertex<V>>> queueHeapSupplier,
-                                         Supplier<AddressableHeap<Double, ContractionVertex<V>>> dijkstraSearchHeapSupplier) {
+                                         Supplier<AddressableHeap<Double, ContractionVertex<V>>> shortcutsSearchHeapSupplier) {
         this.graph = graph;
         this.contractionGraph = createContractionGraph();
         this.parallelism = parallelism;
         this.randomSupplier = randomSupplier;
         this.contractionQueue = queueHeapSupplier.get();
-        this.dijkstraSearchHeapSupplier = dijkstraSearchHeapSupplier;
+        this.dijkstraSearchHeapSupplier = shortcutsSearchHeapSupplier;
 
         verticesArray = new Object[graph.vertexSet().size()];
         prioritiesArray = new VertexPriority[graph.vertexSet().size()];
@@ -431,11 +430,11 @@ public class ContractionHierarchyAlgorithm<V, E> {
         Pair<ContractionEdge<E1>, ContractionEdge<E1>> skippedEdges;
         boolean isUpward;
 
-        public ContractionEdge(E1 edge) {
+        ContractionEdge(E1 edge) {
             this.edge = edge;
         }
 
-        public ContractionEdge(Pair<ContractionEdge<E1>, ContractionEdge<E1>> skippedEdges) {
+        ContractionEdge(Pair<ContractionEdge<E1>, ContractionEdge<E1>> skippedEdges) {
             this.skippedEdges = skippedEdges;
         }
     }

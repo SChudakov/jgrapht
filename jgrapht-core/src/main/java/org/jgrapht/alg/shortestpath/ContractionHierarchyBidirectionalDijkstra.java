@@ -13,27 +13,51 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BidirectionalDijkstraShortestPath<V, E> {
+import static org.jgrapht.alg.shortestpath.BidirectionalDijkstraShortestPath.DijkstraSearchFrontier;
+import static org.jgrapht.alg.shortestpath.ContractionHierarchyAlgorithm.ContractionEdge;
+import static org.jgrapht.alg.shortestpath.ContractionHierarchyAlgorithm.ContractionVertex;
 
-    private final Graph<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-            ContractionHierarchyAlgorithm.ContractionEdge<E>> contractionGraph;
-    private final Map<V, ContractionHierarchyAlgorithm.ContractionVertex<V>> contractionMapping;
+public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BaseShortestPathAlgorithm<V, E> {
 
-    private final Supplier<AddressableHeap<Double, Pair<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-            ContractionHierarchyAlgorithm.ContractionEdge<E>>>> contractionGraphHeapSupplier;
+    private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
+    private Map<V, ContractionVertex<V>> contractionMapping;
+
+    private Supplier<AddressableHeap<Double, Pair<ContractionVertex<V>,
+            ContractionEdge<E>>>> contractionGraphHeapSupplier;
+
+    private double radius;
 
     public ContractionHierarchyBidirectionalDijkstra(Graph<V, E> graph) {
-        this(graph, new ContractionHierarchyAlgorithm<>(graph).computeContractionHierarchy());
+        super(graph);
+        Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>, Map<V, ContractionVertex<V>>> p
+                = new ContractionHierarchyAlgorithm<>(graph).computeContractionHierarchy();
+        init(p.getFirst(), p.getSecond(), Double.POSITIVE_INFINITY, PairingHeap::new);
     }
 
     public ContractionHierarchyBidirectionalDijkstra(Graph<V, E> graph,
-                                                     Pair<Graph<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-                                                             ContractionHierarchyAlgorithm.ContractionEdge<E>>,
-                                                             Map<V, ContractionHierarchyAlgorithm.ContractionVertex<V>>> p) {
+                                                     Graph<ContractionVertex<V>, ContractionEdge<E>> contractedGraph,
+                                                     Map<V, ContractionVertex<V>> contractionMapping) {
+        this(graph, contractedGraph, contractionMapping, Double.POSITIVE_INFINITY, PairingHeap::new);
+    }
+
+    public ContractionHierarchyBidirectionalDijkstra(Graph<V, E> graph,
+                                                     Graph<ContractionVertex<V>, ContractionEdge<E>> contractedGraph,
+                                                     Map<V, ContractionVertex<V>> contractionMapping,
+                                                     double radius,
+                                                     Supplier<AddressableHeap<Double, Pair<ContractionVertex<V>,
+                                                             ContractionEdge<E>>>> heapSupplier) {
         super(graph);
-        this.contractionGraph = p.getFirst();
-        this.contractionMapping = p.getSecond();
-        this.contractionGraphHeapSupplier = PairingHeap::new;
+        init(contractedGraph, contractionMapping, radius, heapSupplier);
+    }
+
+    private void init(Graph<ContractionVertex<V>, ContractionEdge<E>> contractedGraph,
+                      Map<V, ContractionVertex<V>> contractionMapping,
+                      double radius,
+                      Supplier<AddressableHeap<Double, Pair<ContractionVertex<V>, ContractionEdge<E>>>> heapSupplier) {
+        this.contractionGraph = contractedGraph;
+        this.contractionMapping = contractionMapping;
+        this.radius = radius;
+        this.contractionGraphHeapSupplier = heapSupplier;
     }
 
     @Override
@@ -50,18 +74,16 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
             return createEmptyPath(source, sink);
         }
 
-        ContractionHierarchyAlgorithm.ContractionVertex<V> contractedSource = contractionMapping.get(source);
-        ContractionHierarchyAlgorithm.ContractionVertex<V> contractedSink = contractionMapping.get(sink);
+        ContractionVertex<V> contractedSource = contractionMapping.get(source);
+        ContractionVertex<V> contractedSink = contractionMapping.get(sink);
 
         // create frontiers
-        ContractionSearchFrontier<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-                ContractionHierarchyAlgorithm.ContractionEdge<E>> forwardFrontier
+        ContractionSearchFrontier<ContractionVertex<V>, ContractionEdge<E>> forwardFrontier
                 = new ContractionSearchFrontier<>(contractionGraph,
                 contractionGraphHeapSupplier, e -> e.isUpward);
 
 
-        ContractionSearchFrontier<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-                ContractionHierarchyAlgorithm.ContractionEdge<E>> backwardFrontier
+        ContractionSearchFrontier<ContractionVertex<V>, ContractionEdge<E>> backwardFrontier
                 = new ContractionSearchFrontier<>(new EdgeReversedGraph<>(contractionGraph),
                 contractionGraphHeapSupplier, e -> !e.isUpward);
 
@@ -72,12 +94,10 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
 
         // initialize best path
         double bestPath = Double.POSITIVE_INFINITY;
-        ContractionHierarchyAlgorithm.ContractionVertex<V> bestPathCommonVertex = null;
+        ContractionVertex<V> bestPathCommonVertex = null;
 
-        ContractionSearchFrontier<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-                ContractionHierarchyAlgorithm.ContractionEdge<E>> frontier = forwardFrontier;
-        ContractionSearchFrontier<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-                ContractionHierarchyAlgorithm.ContractionEdge<E>> otherFrontier = backwardFrontier;
+        ContractionSearchFrontier<ContractionVertex<V>, ContractionEdge<E>> frontier = forwardFrontier;
+        ContractionSearchFrontier<ContractionVertex<V>, ContractionEdge<E>> otherFrontier = backwardFrontier;
 
         while (true) {
             if (frontier.heap.isEmpty()) {
@@ -97,17 +117,17 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
                 frontier.isFinished = true;
             } else {
                 // frontier scan
-                AddressableHeap.Handle<Double, Pair<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-                        ContractionHierarchyAlgorithm.ContractionEdge<E>>> node = frontier.heap.deleteMin();
-                ContractionHierarchyAlgorithm.ContractionVertex<V> v = node.getValue().getFirst();
+                AddressableHeap.Handle<Double, Pair<ContractionVertex<V>, ContractionEdge<E>>> node
+                        = frontier.heap.deleteMin();
+                ContractionVertex<V> v = node.getValue().getFirst();
                 double vDistance = node.getKey();
 
-                for (ContractionHierarchyAlgorithm.ContractionEdge<E> e : frontier.graph.outgoingEdgesOf(v)) {
+                for (ContractionEdge<E> e : frontier.graph.outgoingEdgesOf(v)) {
                     if (!frontier.isUpwardDirection.apply(e)) { // skip downward edges
                         continue;
                     }
 
-                    ContractionHierarchyAlgorithm.ContractionVertex<V> u = frontier.graph.getEdgeTarget(e);
+                    ContractionVertex<V> u = frontier.graph.getEdgeTarget(e);
 
                     double eWeight = frontier.graph.getEdgeWeight(e);
 
@@ -125,8 +145,8 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
 
             // swap frontiers
             if (!otherFrontier.isFinished) {
-                ContractionSearchFrontier<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-                        ContractionHierarchyAlgorithm.ContractionEdge<E>> tmpFrontier = frontier;
+                ContractionSearchFrontier<ContractionVertex<V>,
+                        ContractionEdge<E>> tmpFrontier = frontier;
                 frontier = otherFrontier;
                 otherFrontier = tmpFrontier;
             }
@@ -142,14 +162,12 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
     }
 
     private GraphPath<V, E> createPath(
-            BaseSearchFrontier<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-                    ContractionHierarchyAlgorithm.ContractionEdge<E>> forwardFrontier,
-            BaseSearchFrontier<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-                    ContractionHierarchyAlgorithm.ContractionEdge<E>> backwardFrontier,
+            ContractionSearchFrontier<ContractionVertex<V>, ContractionEdge<E>> forwardFrontier,
+            ContractionSearchFrontier<ContractionVertex<V>, ContractionEdge<E>> backwardFrontier,
             double weight,
-            ContractionHierarchyAlgorithm.ContractionVertex<V> source,
-            ContractionHierarchyAlgorithm.ContractionVertex<V> commonVertex,
-            ContractionHierarchyAlgorithm.ContractionVertex<V> sink) {
+            ContractionVertex<V> source,
+            ContractionVertex<V> commonVertex,
+            ContractionVertex<V> sink) {
 
         LinkedList<E> edgeList = new LinkedList<>();
         LinkedList<V> vertexList = new LinkedList<>();
@@ -158,9 +176,9 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
         vertexList.add(commonVertex.vertex);
 
         // traverse forward path
-        ContractionHierarchyAlgorithm.ContractionVertex<V> v = commonVertex;
+        ContractionVertex<V> v = commonVertex;
         while (true) {
-            ContractionHierarchyAlgorithm.ContractionEdge<E> e = forwardFrontier.getTreeEdge(v);
+            ContractionEdge<E> e = forwardFrontier.getTreeEdge(v);
 
             if (e == null) {
                 break;
@@ -173,7 +191,7 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
         // traverse reverse path
         v = commonVertex;
         while (true) {
-            ContractionHierarchyAlgorithm.ContractionEdge<E> e = backwardFrontier.getTreeEdge(v);
+            ContractionEdge<E> e = backwardFrontier.getTreeEdge(v);
 
             if (e == null) {
                 break;
@@ -186,12 +204,7 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
         return new GraphWalk<>(graph, source.vertex, sink.vertex, vertexList, edgeList, weight);
     }
 
-    // add to the lists all edges E and vertices V that are in between
-    // of source and target of #edge
-    private void unpackBackward(
-            ContractionHierarchyAlgorithm.ContractionEdge<E> edge,
-            LinkedList<V> vertexList,
-            LinkedList<E> edgeList) {
+    private void unpackBackward(ContractionEdge<E> edge, LinkedList<V> vertexList, LinkedList<E> edgeList) {
         if (edge.skippedEdges == null) {
             vertexList.addFirst(contractionGraph.getEdgeSource(edge).vertex);
             edgeList.addFirst(edge.edge);
@@ -201,10 +214,7 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
         }
     }
 
-    private void unpackForward(
-            ContractionHierarchyAlgorithm.ContractionEdge<E> edge,
-            LinkedList<V> vertexList,
-            LinkedList<E> edgeList) {
+    private void unpackForward(ContractionEdge<E> edge, LinkedList<V> vertexList, LinkedList<E> edgeList) {
         if (edge.skippedEdges == null) {
             vertexList.addLast(contractionGraph.getEdgeTarget(edge).vertex);
             edgeList.addLast(edge.edge);
