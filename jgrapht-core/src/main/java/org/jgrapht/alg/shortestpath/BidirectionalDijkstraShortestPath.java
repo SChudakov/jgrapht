@@ -137,12 +137,12 @@ public class BidirectionalDijkstraShortestPath<V, E>
         }
 
         // create frontiers
-        DijkstraSearchFrontier<V,E> forwardFrontier = new DijkstraSearchFrontier<>(graph,heapSupplier.get());
+        DijkstraSearchFrontier<V,E> forwardFrontier = new DijkstraSearchFrontier<>(graph,heapSupplier);
         DijkstraSearchFrontier<V,E> backwardFrontier;
         if (graph.getType().isDirected()) {
-            backwardFrontier = new DijkstraSearchFrontier<>(new EdgeReversedGraph<>(graph), heapSupplier.get());
+            backwardFrontier = new DijkstraSearchFrontier<>(new EdgeReversedGraph<>(graph), heapSupplier);
         } else {
-            backwardFrontier = new DijkstraSearchFrontier<>(graph, heapSupplier.get());
+            backwardFrontier = new DijkstraSearchFrontier<>(graph, heapSupplier);
         }
 
         assert !source.equals(sink);
@@ -216,10 +216,10 @@ public class BidirectionalDijkstraShortestPath<V, E>
         final AddressableHeap<Double, Pair<V1, E1>> heap;
         final Map<V1, AddressableHeap.Handle<Double, Pair<V1, E1>>> seen;
 
-        DijkstraSearchFrontier(Graph<V1, E1> graph, AddressableHeap<Double, Pair<V1, E1>> heap)
+        DijkstraSearchFrontier(Graph<V1, E1> graph, Supplier<AddressableHeap<Double, Pair<V1, E1>>> heapSupplier)
         {
             super(graph);
-            this.heap = heap;
+            this.heap = heapSupplier.get();
             this.seen = new HashMap<>();
         }
 

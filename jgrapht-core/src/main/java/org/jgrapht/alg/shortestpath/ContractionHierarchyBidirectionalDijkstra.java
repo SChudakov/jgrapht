@@ -15,7 +15,8 @@ import java.util.function.Supplier;
 
 public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BidirectionalDijkstraShortestPath<V, E> {
 
-    private final Graph<ContractionHierarchyAlgorithm.ContractionVertex<V>, ContractionHierarchyAlgorithm.ContractionEdge<E>> contractionGraph;
+    private final Graph<ContractionHierarchyAlgorithm.ContractionVertex<V>,
+            ContractionHierarchyAlgorithm.ContractionEdge<E>> contractionGraph;
     private final Map<V, ContractionHierarchyAlgorithm.ContractionVertex<V>> contractionMapping;
 
     private final Supplier<AddressableHeap<Double, Pair<ContractionHierarchyAlgorithm.ContractionVertex<V>,
@@ -37,7 +38,6 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
 
     @Override
     public GraphPath<V, E> getPath(V source, V sink) {
-//        System.out.println(source + " " + sink + " \n");
         if (!graph.containsVertex(source)) {
             throw new IllegalArgumentException(GRAPH_MUST_CONTAIN_THE_SOURCE_VERTEX);
         }
@@ -56,13 +56,14 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
         // create frontiers
         ContractionSearchFrontier<ContractionHierarchyAlgorithm.ContractionVertex<V>,
                 ContractionHierarchyAlgorithm.ContractionEdge<E>> forwardFrontier
-                = new ContractionSearchFrontier<>(contractionGraph, contractionGraphHeapSupplier.get(), e -> e.isUpward);
+                = new ContractionSearchFrontier<>(contractionGraph,
+                contractionGraphHeapSupplier, e -> e.isUpward);
 
 
         ContractionSearchFrontier<ContractionHierarchyAlgorithm.ContractionVertex<V>,
                 ContractionHierarchyAlgorithm.ContractionEdge<E>> backwardFrontier
                 = new ContractionSearchFrontier<>(new EdgeReversedGraph<>(contractionGraph),
-                contractionGraphHeapSupplier.get(), e -> !e.isUpward);
+                contractionGraphHeapSupplier, e -> !e.isUpward);
 
 
         // initialize both frontiers
@@ -124,8 +125,8 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
 
             // swap frontiers
             if (!otherFrontier.isFinished) {
-                ContractionSearchFrontier<ContractionHierarchyAlgorithm.ContractionVertex<V>, ContractionHierarchyAlgorithm.ContractionEdge<E>>
-                        tmpFrontier = frontier;
+                ContractionSearchFrontier<ContractionHierarchyAlgorithm.ContractionVertex<V>,
+                        ContractionHierarchyAlgorithm.ContractionEdge<E>> tmpFrontier = frontier;
                 frontier = otherFrontier;
                 otherFrontier = tmpFrontier;
             }
@@ -133,20 +134,6 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
 
         // create path if found
         if (Double.isFinite(bestPath) && bestPath <= radius) {
-//            GraphPath<V, E> result =  createPath(forwardFrontier, backwardFrontier,
-//                    bestPath, contractedSource, bestPathCommonVertex, contractedSink);
-//            GraphPath<ContractionHierarchyAlgorithm.ContractionVertex<V>, ContractionHierarchyAlgorithm.ContractionEdge<E>>
-//                    contractedPath = new BidirectionalDijkstraShortestPath<>(contractionGraph).createPath(
-//                    forwardFrontier,
-//                    backwardFrontier,
-//                    bestPath,
-//                    contractedSource,
-//                    bestPathCommonVertex,
-//                    contractedSink
-//            );
-//            System.out.println("contracted path length: " + contractedPath.getLength());
-//            System.out.println("unpacked path length: " + result.getLength());
-//            return result;
             return createPath(forwardFrontier, backwardFrontier,
                     bestPath, contractedSource, bestPathCommonVertex, contractedSink);
         } else {
@@ -233,9 +220,9 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
         boolean isFinished;
 
         ContractionSearchFrontier(Graph<V1, E1> graph,
-                                  AddressableHeap<Double, Pair<V1, E1>> heap,
+                                  Supplier<AddressableHeap<Double, Pair<V1, E1>>> heapSupplier,
                                   Function<E1, Boolean> isUpwardDirection) {
-            super(graph, heap);
+            super(graph, heapSupplier);
             this.isUpwardDirection = isUpwardDirection;
         }
     }

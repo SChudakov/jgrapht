@@ -35,42 +35,44 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private Object[] verticesArray;
     private VertexPriority[] prioritiesArray;
 
+    private Supplier<Random> randomSupplier;
+    private Supplier<AddressableHeap<Double, ContractionVertex<V>>> dijkstraSearchHeapSupplier;
+
     private ExecutorService executor;
     private ExecutorCompletionService<Void> completionService;
     private int parallelism;
 
-    private Supplier<Random> randomSupplier;
 
     public ContractionHierarchyAlgorithm(Graph<V, E> graph) {
-        this(graph, new PairingHeap<>());
+        this(graph, Runtime.getRuntime().availableProcessors());
     }
 
-    public ContractionHierarchyAlgorithm(Graph<V, E> graph, AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue) {
-        init(graph, contractionQueue, Random::new, Runtime.getRuntime().availableProcessors());
+    public ContractionHierarchyAlgorithm(Graph<V, E> graph, int parallelism) {
+        this(graph, parallelism, Random::new, PairingHeap::new, PairingHeap::new);
     }
 
-    public ContractionHierarchyAlgorithm(Graph<V, E> graph, AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue,
-                                         Supplier<Random> randomSupplier, int parallelism) {
-        init(graph, contractionQueue, randomSupplier, parallelism);
+    public ContractionHierarchyAlgorithm(Graph<V, E> graph, Supplier<Random> randomSupplier) {
+        this(graph, Runtime.getRuntime().availableProcessors(), randomSupplier, PairingHeap::new, PairingHeap::new);
     }
 
-    private void init(Graph<V, E> graph,
-                      AddressableHeap<VertexPriority, ContractionVertex<V>> contractionQueue,
-                      Supplier<Random> randomSupplier,
-                      int parallelism) {
+    public ContractionHierarchyAlgorithm(Graph<V, E> graph,
+                                         int parallelism,
+                                         Supplier<Random> randomSupplier,
+                                         Supplier<AddressableHeap<VertexPriority, ContractionVertex<V>>> queueHeapSupplier,
+                                         Supplier<AddressableHeap<Double, ContractionVertex<V>>> dijkstraSearchHeapSupplier) {
         this.graph = graph;
-        this.contractionQueue = contractionQueue;
-        this.parallelism = parallelism;
         this.contractionGraph = createContractionGraph();
-        this.maskedContractionGraph = new MaskSubgraph<>(contractionGraph,
-                v -> v.contracted,
-                e -> contractionGraph.getEdgeSource(e).contracted || contractionGraph.getEdgeTarget(e).contracted);
+        this.parallelism = parallelism;
         this.randomSupplier = randomSupplier;
+        this.contractionQueue = queueHeapSupplier.get();
+        this.dijkstraSearchHeapSupplier = dijkstraSearchHeapSupplier;
 
         verticesArray = new Object[graph.vertexSet().size()];
-
-        contractionMapping = new HashMap<>();
         prioritiesArray = new VertexPriority[graph.vertexSet().size()];
+        maskedContractionGraph = new MaskSubgraph<>(contractionGraph,
+                v -> v.contracted,
+                e -> false/* contractionGraph.getEdgeSource(e).contracted || contractionGraph.getEdgeTarget(e).contracted*/);
+        contractionMapping = new HashMap<>();
         executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         completionService = new ExecutorCompletionService<>(executor);
     }
@@ -142,15 +144,8 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private void computeInitialPriorities() {
-//        contractionGraph.vertexSet().forEach(vertex -> {
-//            VertexPriority priority = getPriority(vertex, (int) (Math.random() * 1000000));
-////            prioritiesArray.put(vertex, priority);
-//            contractionQueue.insert(priority, vertex);
-////            System.out.println(vertex.vertex + " " + priority);
-//        });
-
         for (int i = 0; i < parallelism; ++i) {
-            completionService.submit(new ContractionWorker(i, randomSupplier.get()), null);
+            completionService.submit(new ContractionWorker(i), null);
         }
 
         takeTasks(parallelism);
@@ -187,7 +182,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
     private void contractVertex(ContractionVertex<V> vertex, int contractionIndex,
                                 List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts) {
-//        System.out.println(vertex.vertex);
         // add shortcuts
         for (Pair<ContractionEdge<E>, ContractionEdge<E>> shortcut : shortcuts) {
             ContractionVertex<V> shortcutSource = contractionGraph.getEdgeSource(shortcut.getFirst());
@@ -304,7 +298,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
                         Set<ContractionVertex<V>> targets,
                         ContractionVertex<V> forbiddenVertex,
                         double radius) {
-        AddressableHeap<Double, ContractionVertex<V>> heap = new PairingHeap<>();
+        AddressableHeap<Double, ContractionVertex<V>> heap = dijkstraSearchHeapSupplier.get();
         Map<ContractionVertex<V>, AddressableHeap.Handle<Double, ContractionVertex<V>>> distanceMap = new HashMap<>();
         updateDistance(source, 0.0, heap, distanceMap);
 
@@ -395,7 +389,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private class ToListConsumer implements BiConsumer<ContractionEdge<E>, ContractionEdge<E>> {
         List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts;
 
-        public ToListConsumer() {
+        ToListConsumer() {
             shortcuts = new ArrayList<>();
         }
 
@@ -408,7 +402,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private class CountingConsumer implements BiConsumer<ContractionEdge<E>, ContractionEdge<E>> {
         int amount;
 
-        public CountingConsumer() {
+        CountingConsumer() {
             amount = 0;
         }
 
@@ -426,17 +420,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
         int neighborsContracted;
         boolean contracted;
 
-        @Override
-        public String toString() {
-            return "ContractionVertex{" +
-                    "vertex=" + vertex +
-                    ", contractionIndex=" + contractionIndex +
-                    ", neighborsContracted=" + neighborsContracted +
-                    ", contracted=" + contracted +
-                    '}';
-        }
-
-        public ContractionVertex(V1 vertex, int index) {
+        ContractionVertex(V1 vertex, int index) {
             this.index = index;
             this.vertex = vertex;
         }
@@ -454,15 +438,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         public ContractionEdge(Pair<ContractionEdge<E1>, ContractionEdge<E1>> skippedEdges) {
             this.skippedEdges = skippedEdges;
         }
-
-        @Override
-        public String toString() {
-            return "ContractionEdge{" +
-                    "edge=" + edge +
-                    ", skippedEdges=" + skippedEdges +
-                    ", isUpward=" + isUpward +
-                    '}';
-        }
     }
 
     private class ContractionWorker implements Runnable {
@@ -470,9 +445,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
         private int workerIndex;
         private Random random;
 
-        ContractionWorker(int workerIndex, Random random) {
+        ContractionWorker(int workerIndex) {
             this.workerIndex = workerIndex;
-            this.random = random;
+            this.random = randomSupplier.get();
         }
 
         @Override
@@ -480,6 +455,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
             int start = (graph.vertexSet().size() * workerIndex) / parallelism;
             int end = (graph.vertexSet().size() * (workerIndex + 1)) / parallelism;
             for (int vertexIndex = start; vertexIndex < end; ++vertexIndex) {
+                @SuppressWarnings("unchecked")
                 ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
                 prioritiesArray[vertexIndex] = getPriority(vertex, random.nextInt());
             }
@@ -489,7 +465,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private class UpwardEdgesMarkerWorker implements Runnable {
         private int workerIndex;
 
-        public UpwardEdgesMarkerWorker(int workerIndex) {
+        UpwardEdgesMarkerWorker(int workerIndex) {
             this.workerIndex = workerIndex;
         }
 
@@ -498,6 +474,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
             int start = (graph.vertexSet().size() * workerIndex) / parallelism;
             int end = (graph.vertexSet().size() * (workerIndex + 1)) / parallelism;
             for (int vertexIndex = start; vertexIndex < end; ++vertexIndex) {
+                @SuppressWarnings("unchecked")
                 ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
                 contractionGraph.outgoingEdgesOf(vertex).forEach(
                         e -> e.isUpward = contractionGraph.getEdgeSource(e).contractionIndex <
@@ -512,9 +489,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         int neighborsContracted;
         int random;
 
-        private VertexPriority(int edgeDifference, int neighborsContracted) {
-            this(edgeDifference, neighborsContracted, 0);
-        }
 
         VertexPriority(int edgeDifference, int neighborsContracted, int random) {
             this.edgeDifference = edgeDifference;
@@ -522,7 +496,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
             this.random = random;
         }
 
-        public int compareToIgnoreRandom(VertexPriority other) {
+        int compareToIgnoreRandom(VertexPriority other) {
             int compareByEdgeDifference = Integer.compare(edgeDifference, other.edgeDifference);
             if (compareByEdgeDifference == 0) {
                 return Integer.compare(neighborsContracted, other.neighborsContracted);
@@ -543,7 +517,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
-            @SuppressWarnings("unchecked")
             VertexPriority priority = (VertexPriority) o;
             return edgeDifference == priority.edgeDifference &&
                     neighborsContracted == priority.neighborsContracted &&
@@ -553,15 +526,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         @Override
         public int hashCode() {
             return Objects.hash(edgeDifference, neighborsContracted, random);
-        }
-
-        @Override
-        public String toString() {
-            return "VertexPriority{" +
-                    "edgeDifference=" + edgeDifference +
-                    ", neighborsContracted=" + neighborsContracted +
-                    ", random=" + random +
-                    '}';
         }
     }
 }
