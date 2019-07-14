@@ -65,8 +65,8 @@ public class DijkstraShortestPathPerformanceTest
 
             this.graph = GraphTypeBuilder
                 .directed().weighted(true).edgeClass(DefaultWeightedEdge.class)
-                .vertexSupplier(SupplierUtil.createIntegerSupplier()).allowingMultipleEdges(false)
-                .allowingSelfLoops(false).buildGraph();
+                .vertexSupplier(SupplierUtil.createIntegerSupplier()).allowingMultipleEdges(true)
+                .allowingSelfLoops(true).buildGraph();
 
             generator.generateGraph(graph);
 

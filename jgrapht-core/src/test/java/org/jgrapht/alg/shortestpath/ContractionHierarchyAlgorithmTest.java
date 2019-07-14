@@ -276,7 +276,7 @@ public class ContractionHierarchyAlgorithmTest {
                     contractionGraph.getEdge(
                             contractionMapping.get(1), contractionMapping.get(3))), 1e-9);
         } else {
-            assertEquals(2, contractionGraph.edgeSet().size());
+            assertEquals(4, contractionGraph.edgeSet().size());
         }
     }
 
@@ -336,7 +336,7 @@ public class ContractionHierarchyAlgorithmTest {
                     contractionGraph.getEdge(
                             contractionMapping.get(6), contractionMapping.get(7))), 1e-9);
         } else {
-            assertEquals(4, contractionGraph.edgeSet().size());
+            assertEquals(8, contractionGraph.edgeSet().size());
         }
     }
 
@@ -375,7 +375,7 @@ public class ContractionHierarchyAlgorithmTest {
         Map<Integer, ContractionHierarchyAlgorithm.ContractionVertex<Integer>> contractionMapping = p.getSecond();
 
         assertEquals(9, graph.vertexSet().size());
-        assertEquals(12, contractionGraph.edgeSet().size());
+        assertEquals(24, contractionGraph.edgeSet().size());
     }
 
 //    @Test

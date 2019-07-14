@@ -2,7 +2,6 @@ package org.jgrapht.alg.shortestpath;
 
 import org.jgrapht.Graph;
 import org.jgrapht.GraphPath;
-import org.jgrapht.Graphs;
 import org.jgrapht.alg.util.Pair;
 import org.jgrapht.graph.EdgeReversedGraph;
 import org.jgrapht.graph.GraphWalk;
@@ -11,7 +10,7 @@ import org.jheaps.tree.PairingHeap;
 
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BidirectionalDijkstraShortestPath<V, E> {
@@ -55,28 +54,15 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
         ContractionHierarchyAlgorithm.ContractionVertex<V> contractedSink = contractionMapping.get(sink);
 
         // create frontiers
-        BiFunction<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-                ContractionHierarchyAlgorithm.ContractionVertex<V>, Boolean> forwardFunction
-                = (sourceVertex, targetVertex) -> sourceVertex.contractionIndex < targetVertex.contractionIndex;
         ContractionSearchFrontier<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-                ContractionHierarchyAlgorithm.ContractionEdge<E>>
-                forwardFrontier
-                = new ContractionSearchFrontier<>(contractionGraph, contractionGraphHeapSupplier.get(), forwardFunction);
+                ContractionHierarchyAlgorithm.ContractionEdge<E>> forwardFrontier
+                = new ContractionSearchFrontier<>(contractionGraph, contractionGraphHeapSupplier.get(), e -> e.isUpward);
 
 
-        BiFunction<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-                ContractionHierarchyAlgorithm.ContractionVertex<V>, Boolean> backwardFunction
-                = (startVertex, endVertex) -> startVertex.contractionIndex < endVertex.contractionIndex;
         ContractionSearchFrontier<ContractionHierarchyAlgorithm.ContractionVertex<V>,
-                ContractionHierarchyAlgorithm.ContractionEdge<E>>
-                backwardFrontier;
-        if (contractionGraph.getType().isDirected()) {
-            backwardFrontier = new ContractionSearchFrontier<>(new EdgeReversedGraph<>(contractionGraph),
-                    contractionGraphHeapSupplier.get(), backwardFunction);
-        } else {
-            backwardFrontier = new ContractionSearchFrontier<>(contractionGraph,
-                    contractionGraphHeapSupplier.get(), backwardFunction);
-        }
+                ContractionHierarchyAlgorithm.ContractionEdge<E>> backwardFrontier
+                = new ContractionSearchFrontier<>(new EdgeReversedGraph<>(contractionGraph),
+                contractionGraphHeapSupplier.get(), e -> !e.isUpward);
 
 
         // initialize both frontiers
@@ -116,11 +102,11 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
                 double vDistance = node.getKey();
 
                 for (ContractionHierarchyAlgorithm.ContractionEdge<E> e : frontier.graph.outgoingEdgesOf(v)) {
-                    ContractionHierarchyAlgorithm.ContractionVertex<V> u = Graphs.getOppositeVertex(frontier.graph, e, v);
-
-                    if (!frontier.isUpwardDirection.apply(v, u)) { // skip downward edges
+                    if (!frontier.isUpwardDirection.apply(e)) { // skip downward edges
                         continue;
                     }
+
+                    ContractionHierarchyAlgorithm.ContractionVertex<V> u = frontier.graph.getEdgeTarget(e);
 
                     double eWeight = frontier.graph.getEdgeWeight(e);
 
@@ -192,7 +178,9 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
             if (e == null) {
                 break;
             }
-            v = unpackForward(e, v, vertexList, edgeList);
+
+            unpackBackward(e, vertexList, edgeList);
+            v = contractionGraph.getEdgeSource(e);
         }
 
         // traverse reverse path
@@ -203,7 +191,9 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
             if (e == null) {
                 break;
             }
-            v = unpackBackward(e, v, vertexList, edgeList);
+
+            unpackForward(e, vertexList, edgeList);
+            v = contractionGraph.getEdgeTarget(e);
         }
 
         return new GraphWalk<>(graph, source.vertex, sink.vertex, vertexList, edgeList, weight);
@@ -211,73 +201,40 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends Bidirection
 
     // add to the lists all edges E and vertices V that are in between
     // of source and target of #edge
-    private ContractionHierarchyAlgorithm.ContractionVertex<V> unpackForward(
+    private void unpackBackward(
             ContractionHierarchyAlgorithm.ContractionEdge<E> edge,
-            ContractionHierarchyAlgorithm.ContractionVertex<V> vertex,
             LinkedList<V> vertexList,
             LinkedList<E> edgeList) {
-        ContractionHierarchyAlgorithm.ContractionVertex<V> oppositeVertex;
-
         if (edge.skippedEdges == null) {
-            oppositeVertex = Graphs.getOppositeVertex(contractionGraph, edge, vertex);
-            vertexList.addFirst(oppositeVertex.vertex);
+            vertexList.addFirst(contractionGraph.getEdgeSource(edge).vertex);
             edgeList.addFirst(edge.edge);
-            return oppositeVertex;
         } else {
-            if (graph.getType().isDirected()) {
-                oppositeVertex = unpackForward(edge.skippedEdges.getSecond(), vertex, vertexList, edgeList);
-                return unpackForward(edge.skippedEdges.getFirst(), oppositeVertex, vertexList, edgeList);
-            } else {
-                ContractionHierarchyAlgorithm.ContractionEdge<E> second = edge.skippedEdges.getSecond();
-                if (contractionGraph.getEdgeTarget(second).equals(vertex) ||
-                        contractionGraph.getEdgeSource(second).equals(vertex)) {
-                    oppositeVertex = unpackForward(second, vertex, vertexList, edgeList);
-                    return unpackForward(edge.skippedEdges.getFirst(), oppositeVertex, vertexList, edgeList);
-                } else {
-                    oppositeVertex = unpackForward(edge.skippedEdges.getFirst(), vertex, vertexList, edgeList);
-                    return unpackForward(second, oppositeVertex, vertexList, edgeList);
-                }
-            }
+            unpackBackward(edge.skippedEdges.getSecond(), vertexList, edgeList);
+            unpackBackward(edge.skippedEdges.getFirst(), vertexList, edgeList);
         }
     }
 
-    private ContractionHierarchyAlgorithm.ContractionVertex<V> unpackBackward(
+    private void unpackForward(
             ContractionHierarchyAlgorithm.ContractionEdge<E> edge,
-            ContractionHierarchyAlgorithm.ContractionVertex<V> vertex,
             LinkedList<V> vertexList,
             LinkedList<E> edgeList) {
-        ContractionHierarchyAlgorithm.ContractionVertex<V> oppositeVertex;
         if (edge.skippedEdges == null) {
-            oppositeVertex = Graphs.getOppositeVertex(contractionGraph, edge, vertex);
-            vertexList.addLast(oppositeVertex.vertex);
+            vertexList.addLast(contractionGraph.getEdgeTarget(edge).vertex);
             edgeList.addLast(edge.edge);
-            return oppositeVertex;
         } else {
-            if (graph.getType().isDirected()) {
-                oppositeVertex = unpackBackward(edge.skippedEdges.getFirst(), vertex, vertexList, edgeList);
-                return unpackBackward(edge.skippedEdges.getSecond(), oppositeVertex, vertexList, edgeList);
-            } else {
-                ContractionHierarchyAlgorithm.ContractionEdge<E> second = edge.skippedEdges.getSecond();
-                if (contractionGraph.getEdgeTarget(second).equals(vertex) ||
-                        contractionGraph.getEdgeSource(second).equals(vertex)) {
-                    oppositeVertex = unpackBackward(second, vertex, vertexList, edgeList);
-                    return unpackBackward(edge.skippedEdges.getFirst(), oppositeVertex, vertexList, edgeList);
-                } else {
-                    oppositeVertex = unpackBackward(edge.skippedEdges.getFirst(), vertex, vertexList, edgeList);
-                    return unpackBackward(second, oppositeVertex, vertexList, edgeList);
-                }
-            }
+            unpackForward(edge.skippedEdges.getFirst(), vertexList, edgeList);
+            unpackForward(edge.skippedEdges.getSecond(), vertexList, edgeList);
         }
     }
 
     static class ContractionSearchFrontier<V1, E1>
             extends DijkstraSearchFrontier<V1, E1> {
-        final BiFunction<V1, V1, Boolean> isUpwardDirection;
+        final Function<E1, Boolean> isUpwardDirection;
         boolean isFinished;
 
         ContractionSearchFrontier(Graph<V1, E1> graph,
                                   AddressableHeap<Double, Pair<V1, E1>> heap,
-                                  BiFunction<V1, V1, Boolean> isUpwardDirection) {
+                                  Function<E1, Boolean> isUpwardDirection) {
             super(graph, heap);
             this.isUpwardDirection = isUpwardDirection;
         }
