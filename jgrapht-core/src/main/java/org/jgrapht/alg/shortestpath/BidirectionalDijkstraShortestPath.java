@@ -207,6 +207,9 @@ public final class BidirectionalDijkstraShortestPath<V, E>
 
     /**
      * Maintains search frontier during shortest path computation.
+     *
+     * @param <V1> vertices type
+     * @param <E1> edges type
      */
     static class DijkstraSearchFrontier<V1, E1>
         extends

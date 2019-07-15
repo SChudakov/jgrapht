@@ -100,6 +100,9 @@ public abstract class BaseBidirectionalShortestPathAlgorithm<V, E>
 
     /**
      * Base class of the search frontier used by bidirectional shortest path algorithms.
+     *
+     * @param <V1> vertices type
+     * @param <E1> edges type
      */
     abstract static class BaseSearchFrontier<V1, E1>
     {
