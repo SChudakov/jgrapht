@@ -62,8 +62,6 @@ import java.util.function.Supplier;
  * the graph remains very sparse throughout the contraction pro-
  * cess using rather simple heuristics for ordering the nodes.
  *
- *
- *
  * @param <V> the graph vertex type
  * @param <E> the graph edge type
  * @author Semen Chudakov
@@ -94,11 +92,15 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     public ContractionHierarchyAlgorithm(Graph<V, E> graph, int parallelism) {
-        this(graph, parallelism, Random::new, PairingHeap::new, PairingHeap::new);
+        this(graph, parallelism, Random::new);
     }
 
     public ContractionHierarchyAlgorithm(Graph<V, E> graph, Supplier<Random> randomSupplier) {
-        this(graph, Runtime.getRuntime().availableProcessors(), randomSupplier, PairingHeap::new, PairingHeap::new);
+        this(graph, Runtime.getRuntime().availableProcessors(), randomSupplier);
+    }
+
+    public ContractionHierarchyAlgorithm(Graph<V, E> graph, int parallelism, Supplier<Random> randomSupplier) {
+        this(graph, parallelism, randomSupplier, PairingHeap::new, PairingHeap::new);
     }
 
     public ContractionHierarchyAlgorithm(Graph<V, E> graph, int parallelism,
@@ -189,6 +191,13 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private void computeInitialPriorities() {
+//        contractionGraph.vertexSet().forEach(vertex -> {
+//            VertexPriority priority = getPriority(vertex, (int) (Math.random() * 1000000));
+////            prioritiesArray.put(vertex, priority);
+//            contractionQueue.insert(priority, vertex);
+////            System.out.println(vertex.vertex + " " + priority);
+//        });
+
         for (int i = 0; i < parallelism; ++i) {
             completionService.submit(new ContractionWorker(i), null);
         }
@@ -465,7 +474,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
         int neighborsContracted;
         boolean contracted;
 
-        ContractionVertex(V1 vertex, int index) {
+        public ContractionVertex(V1 vertex, int index) {
             this.index = index;
             this.vertex = vertex;
         }
@@ -490,7 +499,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
         private int workerIndex;
         private Random random;
 
-        ContractionWorker(int workerIndex) {
+        public ContractionWorker(int workerIndex) {
             this.workerIndex = workerIndex;
             this.random = randomSupplier.get();
         }
@@ -535,7 +544,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
         int random;
 
 
-        VertexPriority(int edgeDifference, int neighborsContracted, int random) {
+        public VertexPriority(int edgeDifference, int neighborsContracted, int random) {
             this.edgeDifference = edgeDifference;
             this.neighborsContracted = neighborsContracted;
             this.random = random;
