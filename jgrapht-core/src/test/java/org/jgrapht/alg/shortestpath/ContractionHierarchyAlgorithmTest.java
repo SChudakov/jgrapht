@@ -79,7 +79,7 @@ public class ContractionHierarchyAlgorithmTest {
 
         assertEquals(3, contractionGraph.vertexSet().size());
 
-        if (contractionMapping.get(2).contractionIndex == 0) {
+        if (contractionMapping.get(2).contractionLevel == 0) {
             assertEquals(3, contractionGraph.edgeSet().size());
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(3)));
             assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
@@ -110,7 +110,7 @@ public class ContractionHierarchyAlgorithmTest {
 
         assertEquals(3, graph.vertexSet().size());
 
-        if (contractionMapping.get(2).contractionIndex == 0) {
+        if (contractionMapping.get(2).contractionLevel == 0) {
             assertEquals(6, contractionGraph.edgeSet().size());
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(3)));
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(3), contractionMapping.get(1)));
@@ -145,7 +145,7 @@ public class ContractionHierarchyAlgorithmTest {
 
         assertEquals(5, graph.vertexSet().size());
 
-        if (contractionMapping.get(5).contractionIndex == 0) {
+        if (contractionMapping.get(5).contractionLevel == 0) {
             assertEquals(8, contractionGraph.edgeSet().size());
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(6)));
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(7)));
@@ -190,7 +190,7 @@ public class ContractionHierarchyAlgorithmTest {
 
         assertEquals(5, graph.vertexSet().size());
 
-        if (contractionMapping.get(5).contractionIndex == 0) {
+        if (contractionMapping.get(5).contractionLevel == 0) {
             assertEquals(20, contractionGraph.edgeSet().size());
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(2)));
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(6)));
@@ -261,7 +261,7 @@ public class ContractionHierarchyAlgorithmTest {
 
         assertEquals(3, graph.vertexSet().size());
 
-        if (contractionMapping.get(2).contractionIndex == 0) {
+        if (contractionMapping.get(2).contractionLevel == 0) {
             assertEquals(6, contractionGraph.edgeSet().size());
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(3)));
             assertEquals(2.0, contractionGraph.getEdgeWeight(contractionGraph.getEdge(
@@ -293,7 +293,7 @@ public class ContractionHierarchyAlgorithmTest {
 
         assertEquals(5, graph.vertexSet().size());
 
-        if (contractionMapping.get(5).contractionIndex == 0) {
+        if (contractionMapping.get(5).contractionLevel == 0) {
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(2)));
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(6)));
             assertTrue(contractionGraph.containsEdge(contractionMapping.get(1), contractionMapping.get(7)));
