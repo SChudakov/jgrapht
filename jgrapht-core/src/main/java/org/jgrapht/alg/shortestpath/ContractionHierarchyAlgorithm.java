@@ -292,6 +292,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
 
             contractIndependentSet(independentSetStart, notContractedVerticesEnd);
+            markContracted(independentSetStart, notContractedVerticesEnd);
 
             for (int i = 0; i < independentSetStart; ++i) {
 //                System.out.println(dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent);
@@ -302,7 +303,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
             for (int i = independentSetStart; i < notContractedVerticesEnd; ++i) {
 //                System.out.println(dataArray[((ContractionVertex<V>) verticesArray[independentSetStart]).vertexId].isContracted);
                 assert dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent;
-//                assert dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted;
+                assert dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted;
 //                if (!dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted) {
 //                    System.out.println(((ContractionVertex<V>) verticesArray[i]).vertexId);
 //                }
@@ -498,10 +499,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
         // update vertex data
         vertex.contractionLevel = contractionLevel;
-        VertexData data = dataArray[vertex.vertexId];
-        data.isContracted = true;
-
-        updateVertexDataAndNeighboursPriorities(data, neighbours);
+        updateVertexDataAndNeighboursPriorities(dataArray[vertex.vertexId], neighbours);
     }
 
     private void updateVertexDataAndNeighboursPriorities(VertexData vertexData, Set<ContractionVertex<V>> neighbours) {
@@ -509,6 +507,12 @@ public class ContractionHierarchyAlgorithm<V, E> {
             VertexData neighbourData = dataArray[neighbour.vertexId];
             vertexData.depth = Math.max(vertexData.depth + 1, neighbourData.depth);
             updatePriority(neighbour, neighbourData);
+        }
+    }
+
+    private void markContracted(int independentSetStart, int independentSetEnd) {
+        for (int position = independentSetStart; position < independentSetEnd; ++position) {
+            dataArray[position].isContracted = true;
         }
     }
 
@@ -578,11 +582,20 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
 
             for (ContractionVertex<V> successor : successors) {
-                ContractionEdge<E> outEdge = contractionGraph.getEdge(vertex, successor);
-                double pathWeight = contractionGraph.getEdgeWeight(inEdge) + contractionGraph.getEdgeWeight(outEdge);
+                ContractionEdge<E> outEdge;
+                try {
+                    outEdge = contractionGraph.getEdge(vertex, successor);
+                } catch (NullPointerException e) {
+                    System.out.println("vertex: " + vertex);
+                    System.out.println("successor: " + successor);
+                    System.out.println("contains: " + contractionGraph.containsEdge(vertex, successor));
+                    throw e;
+                }
+                double pathWeight = 0;
+                pathWeight += contractionGraph.getEdgeWeight(inEdge);
+                pathWeight += contractionGraph.getEdgeWeight(outEdge);
 
-                if (!distances.containsKey(successor) ||
-                        distances.get(successor).getKey() > pathWeight) {
+                if (!distances.containsKey(successor) || distances.get(successor).getKey() > pathWeight) {
                     shortcutConsumer.accept(inEdge, outEdge);
                     if (graph.getType().isUndirected()) {
                         shortcutConsumer.accept(
@@ -646,6 +659,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
             if (successor.equals(forbiddenVertex) ||
                     (dataArray[successor.vertexId] != null && dataArray[successor.vertexId].isIndependent)) {
+                // skip independent vertices because they will be contracted
                 continue;
             }
 
