@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -104,7 +106,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
         this(graph, Runtime.getRuntime().availableProcessors(), randomSupplier, PairingHeap::new);
     }
 
-    public ContractionHierarchyAlgorithm(Graph<V, E> graph, int parallelism,Supplier<Random> randomSupplier) {
+    public ContractionHierarchyAlgorithm(Graph<V, E> graph, int parallelism, Supplier<Random> randomSupplier) {
         this(graph, parallelism, randomSupplier, PairingHeap::new);
     }
 
@@ -131,24 +133,61 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
         independentSetWorkers = new ArrayList<>(parallelism);
         contractorWorkers = new ArrayList<>(parallelism);
+        Set<Integer> ids = new ConcurrentSkipListSet<>();
+        Set<Integer> levels = new ConcurrentSkipListSet<>();
         for (int i = 0; i < parallelism; ++i) {
             independentSetWorkers.add(new IndependentSet(i));
-            contractorWorkers.add(new VerticesContractor(i));
+            contractorWorkers.add(new VerticesContractor(i, ids, levels));
         }
     }
 
 
     public Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>,
             Map<V, ContractionVertex<V>>> computeContractionHierarchy() {
+        System.out.println(graph.vertexSet().size());
         fillContractionGraphAndVerticesArray();
         computeInitialPriorities();
-
+//        System.out.println("checking stuff");
+//        int cnt = 0;
+//        for (ContractionVertex<V> u : contractionGraph.vertexSet()) {
+//            System.out.println(cnt++);
+//            VertexData uData = dataArray[u.vertexId];
+//            for (ContractionVertex<V> v : contractionGraph.vertexSet()) {
+//                if(u.equals(v)){
+//                    continue;
+//                }
+//                VertexData vData = dataArray[v.vertexId];
+//                if (
+//                        !(
+//                                (isGreater(uData.priority, vData.priority, u.vertexId, v.vertexId) &&
+//                                        !isGreater(vData.priority, uData.priority, v.vertexId, u.vertexId)) ||
+//                                        (!isGreater(uData.priority, vData.priority, u.vertexId, v.vertexId) &&
+//                                                isGreater(vData.priority, uData.priority, v.vertexId, u.vertexId))
+//                        )
+//                ) {
+//                    System.out.println(u.vertex + " " + v.vertex);
+//                }
+//            }
+//        }
         contractVertices();
 
         markUpwardEdges();
         shutdownExecutor();
+
+//        Arrays.sort(verticesArray, Comparator.comparingInt(o -> ((ContractionVertex<V>) o).contractionLevel));
+
+//        for (Object o : verticesArray) {
+//            System.out.println(((ContractionVertex<V>) o).contractionLevel);
+//        }
+
+//        for (VertexData data : dataArray) {
+//            System.out.println(data.isContracted);
+//            assert data.isContracted;
+//        }
+
         return Pair.of(contractionGraph, contractionMapping);
     }
+
 
     private Graph<ContractionVertex<V>, ContractionEdge<E>> createContractionGraph() {
         GraphTypeBuilder<ContractionVertex<V>, ContractionEdge<E>> resultBuilder = GraphTypeBuilder.directed();
@@ -217,17 +256,117 @@ public class ContractionHierarchyAlgorithm<V, E> {
         int notContractedVerticesEnd = graph.vertexSet().size();
         int independentSetStart;
 
+
         int cnt = 0;
         while (notContractedVerticesEnd != 0) {
             computeIndependentSet(notContractedVerticesEnd);
 
             independentSetStart = partitionIndependentSet(notContractedVerticesEnd);
-            System.out.println(cnt++ + " " + independentSetStart + " " + notContractedVerticesEnd);
+
+            System.out.println(cnt++ + " " +
+                    independentSetStart + " " +
+                    notContractedVerticesEnd + " " +
+                    (notContractedVerticesEnd - independentSetStart));
+
+//            Set<Integer> verticesIds = new TreeSet<>();
+//            for (int i = independentSetStart; i < notContractedVerticesEnd; ++i) {
+//                verticesIds.add(((ContractionVertex<V>) verticesArray[i]).vertexId);
+//            }
+//            System.out.println("size: " + verticesIds.size());
+//            System.out.println(verticesIds);
+//            throw new RuntimeException();
+
+            for (int i = 0; i < independentSetStart; ++i) {
+//                System.out.println(dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent);
+                assert !dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted;
+                assert !dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent;
+            }
+            for (int i = independentSetStart; i < notContractedVerticesEnd; ++i) {
+//                System.out.println(dataArray[((ContractionVertex<V>) verticesArray[independentSetStart]).vertexId].isContracted);
+                assert !dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted;
+                assert dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent;
+            }
+            for (int i = independentSetStart; i < notContractedVerticesEnd; ++i) {
+                checkIndependent(i);
+            }
+
+
             contractIndependentSet(independentSetStart, notContractedVerticesEnd);
 
+            for (int i = 0; i < independentSetStart; ++i) {
+//                System.out.println(dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent);
+                assert !dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent;
+                assert !dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted;
+            }
+//            System.out.println("pre results");
+            for (int i = independentSetStart; i < notContractedVerticesEnd; ++i) {
+//                System.out.println(dataArray[((ContractionVertex<V>) verticesArray[independentSetStart]).vertexId].isContracted);
+                assert dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent;
+//                assert dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted;
+//                if (!dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted) {
+//                    System.out.println(((ContractionVertex<V>) verticesArray[i]).vertexId);
+//                }
+            }
+
+
+//            Set<Integer> levels = contractorWorkers.get(0).levels;
+//            Set<Integer> ids = contractorWorkers.get(0).ids;
+//            System.out.println("levels size: " + levels.size());
+//            System.out.println("levels: " + levels);
+//            System.out.println("ids size: " + ids.size());
+//            System.out.println("ids: " + ids);
+//
+//            System.out.println("not contained levels");
+//            for (int level = 0; level < notContractedVerticesEnd - independentSetStart; ++level) {
+//                if (!levels.contains(level)) {
+//                    System.out.println(level);
+//                }
+//            }
+//
+//            System.out.println("not contained ids");
+//            for (int position = independentSetStart; position < notContractedVerticesEnd; ++position) {
+//                if (!ids.contains(((ContractionVertex<V>) verticesArray[position]).vertexId)) {
+//                    System.out.println(((ContractionVertex<V>) verticesArray[position]).vertexId);
+//                }
+//            }
+
             notContractedVerticesEnd = independentSetStart;
+//            throw new RuntimeException();
         }
     }
+
+
+    private void checkIndependent(int pos) {
+        ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[pos];
+        VertexData vertexData = dataArray[vertex.vertexId];
+        assert vertexData.isIndependent;
+
+        for (ContractionVertex<V> firstLevelNeighbour : Graphs.neighborSetOf(maskedContractionGraph, vertex)) {
+
+            VertexData d1 = dataArray[firstLevelNeighbour.vertexId];
+            if (d1.isIndependent) {
+                System.out.println("first level: " + vertex.vertex + " " + firstLevelNeighbour.vertex);
+                System.out.println(isGreater(vertexData.priority, d1.priority, vertex.vertexId, firstLevelNeighbour.vertexId));
+                System.out.println(isGreater(d1.priority, vertexData.priority, firstLevelNeighbour.vertexId, vertex.vertexId));
+                System.out.println("is contracted: " + d1.isContracted);
+            }
+            assert !d1.isIndependent;
+
+            for (ContractionVertex<V> secondLevelNeighbour : Graphs.neighborSetOf(maskedContractionGraph, firstLevelNeighbour)) {
+                if (!secondLevelNeighbour.equals(vertex)) {
+                    VertexData d2 = dataArray[secondLevelNeighbour.vertexId];
+                    if (d2.isIndependent) {
+                        System.out.println("second level: " + vertex.vertex + " " + secondLevelNeighbour.vertex);
+                        System.out.println(isGreater(vertexData.priority, d2.priority, vertex.vertexId, secondLevelNeighbour.vertexId));
+                        System.out.println(isGreater(d2.priority, vertexData.priority, secondLevelNeighbour.vertexId, vertex.vertexId));
+                        System.out.println("is contracted: " + d2.isContracted);
+                    }
+                    assert !d2.isIndependent;
+                }
+            }
+        }
+    }
+
 
     private void computeIndependentSet(int notContractedVerticesEnd) {
 //        Arrays.asList(verticesArray).subList(0, notContractedVerticesEnd).forEach(o -> {
@@ -255,7 +394,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
             for (ContractionVertex<V> secondLevelNeighbour :
                     Graphs.neighborSetOf(maskedContractionGraph, firstLevelNeighbour)) {
                 if (!secondLevelNeighbour.equals(vertex)) {
-                    double secondLevelPriority = dataArray[firstLevelNeighbour.vertexId].priority;
+                    double secondLevelPriority = dataArray[secondLevelNeighbour.vertexId].priority;
                     if (isGreater(vertexPriority, secondLevelPriority,
                             vertex.vertexId, secondLevelNeighbour.vertexId)) {
                         return false;
@@ -268,8 +407,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private boolean isGreater(double priority1, double priority2, int vertexId1, int vertexId2) {
-        return priority1 > priority2 || (Math.abs(priority1 - priority2) < Math.ulp(1.0)
-                && tieBreaking(vertexId1, vertexId2));
+//        return priority1 > priority2 || (Math.abs(priority1 - priority2) < Math.ulp(1.0)
+//                && tieBreaking(vertexId1, vertexId2));
+        return priority1 > priority2 || (priority1 == priority2 && tieBreaking(vertexId1, vertexId2));
     }
 
     private boolean tieBreaking(int vertexId1, int vertexId2) {
@@ -323,7 +463,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 //            ContractionVertex<V> vertex = (ContractionVertex<V>) o;
 //            contractVertex(vertex, contractionLevelCounter.getAndIncrement());
 //        });
-
+//        System.out.println("start: " + independentSetStart + " end: " + independentSetEnd);
         for (VerticesContractor worker : contractorWorkers) {
             worker.independentSetStart = independentSetStart;
             worker.independentSetEnd = independentSetEnd;
@@ -333,6 +473,8 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private void contractVertex(ContractionVertex<V> vertex, int contractionLevel) {
+        assert !dataArray[vertex.vertexId].isContracted;
+        assert dataArray[vertex.vertexId].isIndependent;
         // compute shortcuts
         List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts = getShortcuts(vertex);
 
@@ -359,11 +501,10 @@ public class ContractionHierarchyAlgorithm<V, E> {
         VertexData data = dataArray[vertex.vertexId];
         data.isContracted = true;
 
-        updateVertexDataNeighboursPriorities(data, neighbours);
+        updateVertexDataAndNeighboursPriorities(data, neighbours);
     }
 
-    private void updateVertexDataNeighboursPriorities(VertexData vertexData,
-                                                      Set<ContractionVertex<V>> neighbours) {
+    private void updateVertexDataAndNeighboursPriorities(VertexData vertexData, Set<ContractionVertex<V>> neighbours) {
         for (ContractionVertex<V> neighbour : neighbours) {
             VertexData neighbourData = dataArray[neighbour.vertexId];
             vertexData.depth = Math.max(vertexData.depth + 1, neighbourData.depth);
@@ -503,7 +644,8 @@ public class ContractionHierarchyAlgorithm<V, E> {
         for (ContractionEdge<E> edge : graph.outgoingEdgesOf(vertex)) {
             ContractionVertex<V> successor = graph.getEdgeTarget(edge);
 
-            if (successor.equals(forbiddenVertex)) {
+            if (successor.equals(forbiddenVertex) ||
+                    (dataArray[successor.vertexId] != null && dataArray[successor.vertexId].isIndependent)) {
                 continue;
             }
 
@@ -536,8 +678,8 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private void takeTasks(int numOfTasks) {
         for (int i = 0; i < numOfTasks; ++i) {
             try {
-                completionService.take();
-            } catch (InterruptedException e) {
+                completionService.take().get();
+            } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
             }
         }
@@ -663,20 +805,35 @@ public class ContractionHierarchyAlgorithm<V, E> {
         int workerId;
         int independentSetStart;
         int independentSetEnd;
+        Set<Integer> ids;
+        Set<Integer> levels;
 
-        VerticesContractor(int workerId) {
+        VerticesContractor(int workerId, Set<Integer> ids, Set<Integer> levels) {
+            this.ids = ids;
+            this.levels = levels;
             this.workerId = workerId;
         }
 
         @Override
         public void run() {
+//            System.out.println(workerId + " start");
             int start = workerSegmentStart(independentSetStart, independentSetEnd, workerId);
             int end = workerSegmentEnd(independentSetStart, independentSetEnd, workerId);
             for (int vertexIndex = start; vertexIndex < end; ++vertexIndex) {
                 @SuppressWarnings("unchecked")
                 ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
-                contractVertex(vertex, contractionLevelCounter.getAndIncrement());
+                int level = contractionLevelCounter.getAndIncrement();
+                if (ids.contains(vertex.vertexId)) {
+                    throw new IllegalArgumentException("lol");
+                }
+                ids.add(vertex.vertexId);
+                levels.add(level);
+//                System.out.println(vertex.vertexId + " " + level);
+                contractVertex(vertex, level);
             }
+//            System.out.println("ids size: " + ids.size());
+//            System.out.println(ids);
+//            System.out.println(workerId + " finished");
         }
     }
 
@@ -711,7 +868,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
         boolean isIndependent;
         int random;
 
-        public VertexData() {
+        VertexData() {
             random = ThreadLocalRandom.current().nextInt();
         }
     }
