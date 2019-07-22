@@ -25,8 +25,11 @@ import org.jgrapht.graph.builder.GraphTypeBuilder;
 import org.jheaps.AddressableHeap;
 import org.jheaps.tree.PairingHeap;
 
+import java.io.BufferedOutputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -34,6 +37,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
@@ -97,6 +101,21 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private List<Shortcuts> shortcutsWorkers;
     private List<VerticesContractor> contractorWorkers;
     private List<Neighbours> neighboursWorkers;
+
+    private Set<ContractionVertex<V>> sources = ConcurrentHashMap.newKeySet();
+    private Set<ContractionVertex<V>> targets = ConcurrentHashMap.newKeySet();
+    private AtomicInteger numOfShortcuts = new AtomicInteger();
+    private static PrintStream log;
+    static int cntr = 0;
+
+
+    static {
+        try {
+            log = new PrintStream(new BufferedOutputStream(new FileOutputStream("/home/semen/Desktop/logs.txt")));
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
 
 
     public ContractionHierarchyAlgorithm(Graph<V, E> graph) {
@@ -295,8 +314,8 @@ public class ContractionHierarchyAlgorithm<V, E> {
             System.out.println("shortcuts computed");
             contractIndependentSet(independentSetStart, independentSetEnd);
             System.out.println("independent set contracted");
-//            updateNeighbours(independentSetStart, independentSetEnd);
-//            System.out.println("neighbours updated");
+            updateNeighbours(independentSetStart, independentSetEnd);
+            System.out.println("neighbours updated");
             markContracted(independentSetStart, independentSetEnd);
             System.out.println("edges marked contracted");
 
@@ -311,6 +330,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
 
             independentSetEnd = independentSetStart;
+            cntr++;
         }
     }
 
@@ -400,9 +420,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private boolean tieBreaking(int vertexId1, int vertexId2) {
-//        if(dataArray[vertexId1].random != dataArray[vertexId2].random){
-//            return dataArray[vertexId1].random > dataArray[vertexId2].random;
-//        }
+        if (dataArray[vertexId1].random != dataArray[vertexId2].random) {
+            return dataArray[vertexId1].random > dataArray[vertexId2].random;
+        }
         return vertexId1 > vertexId2;
 //        int hash1 = hashFunction.apply(vertexId1);
 //        int hash2 = hashFunction.apply(vertexId2);
@@ -516,6 +536,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
                 assert maskedContractionGraph.containsEdge(shortcut.getFirst());
                 assert maskedContractionGraph.containsEdge(shortcut.getSecond());
 
+                sources.add(shortcutSource);
+                targets.add(shortcutTarget);
+                numOfShortcuts.incrementAndGet();
                 boolean added = contractionGraph.addEdge(shortcutSource, shortcutTarget, shortcutEdge);
 
                 assert maskedContractionGraph.containsEdge(shortcut.getFirst());
@@ -537,16 +560,25 @@ public class ContractionHierarchyAlgorithm<V, E> {
                 assert maskedContractionGraph.containsEdge(shortcut.getSecond());
             }
         } catch (Throwable e) {
-            for (Pair<ContractionEdge<E>, ContractionEdge<E>> sh : shortcuts) {
-                System.out.println(sh);
-            }
+//            for (Pair<ContractionEdge<E>, ContractionEdge<E>> sh : shortcuts) {
+//                System.out.println(sh);
+//            }
+            log.println(Thread.currentThread().getId() + " num of shortcuts: " + numOfShortcuts);
+            log.println(Thread.currentThread().getId() + " num sources: " + sources.size());
+            log.println(Thread.currentThread().getId() + " num targets: " + targets.size());
             throw e;
         }
 
 
-        for (ContractionVertex<V> neighbour : Graphs.neighborSetOf(maskedContractionGraph, vertex)) {
-            VertexData neighbourData = dataArray[neighbour.vertexId];
-            data.depth = Math.max(data.depth + 1, neighbourData.depth);
+        try {
+            for (ContractionVertex<V> neighbour : Graphs.neighborSetOf(maskedContractionGraph, vertex)) {
+                VertexData neighbourData = dataArray[neighbour.vertexId];
+                data.depth = Math.max(data.depth + 1, neighbourData.depth);
+            }
+        } catch (Exception e) {
+            log.println(Thread.currentThread().getId() + " num of shortcuts: " + numOfShortcuts);
+            log.println(Thread.currentThread().getId() + " num sources: " + sources.size());
+            log.println(Thread.currentThread().getId() + " num targets: " + targets.size());
         }
 
 
@@ -802,6 +834,8 @@ public class ContractionHierarchyAlgorithm<V, E> {
             }
         }
         if (errorOccurred) {
+            log.flush();
+            log.close();
             throw new RuntimeException();
         }
     }
@@ -913,9 +947,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
         public void accept(ContractionEdge<E> e1, ContractionEdge<E> e2) {
             shortcuts.add(Pair.of(e1, e2));
             set.add(Pair.of(e1, e2));
-            if (set.contains(Pair.of(e2, e1))) {
-                System.out.println("reverse shortcut");
-            }
+//            if (set.contains(Pair.of(e2, e1))) {
+//                System.out.println("reverse shortcut");
+//            }
         }
     }
 
@@ -1013,13 +1047,17 @@ public class ContractionHierarchyAlgorithm<V, E> {
         public void run() {
             int start = workerSegmentStart(independentSetStart, independentSetEnd, workerId);
             int end = workerSegmentEnd(independentSetStart, independentSetEnd, workerId);
+            int cnt = 0;
             for (int vertexIndex = start; vertexIndex < end; ++vertexIndex) {
                 @SuppressWarnings("unchecked")
                 ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
-                int level = contractionLevelCounter.getAndIncrement();
-                ids.add(vertex.vertexId);
-                levels.add(level);
-                contractVertex(vertex, level);
+                contractVertex(vertex, contractionLevelCounter.getAndIncrement());
+                if(cntr == 1){
+                    log.println(Thread.currentThread().getId() + " " + cnt++ + " " + System.nanoTime());
+                }
+                //                int level = ;
+//                ids.add(vertex.vertexId);
+//                levels.add(level);
             }
         }
     }
