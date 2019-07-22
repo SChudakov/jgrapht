@@ -239,7 +239,6 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
         reader.readGraph(graph, path, ShortestPathPerformance::greatCircleDistance);
         System.out.println("graph read");
 
-//        System.out.println(graph.containsEdge(new Node(1203775436L, 1.5557865, 42.6276914), new Node(5044381870L, 1.5562043, 42.6278807)));
 
         List<Pair<Node, Node>> queries = getQueries(graph);
 
