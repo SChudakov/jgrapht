@@ -26,10 +26,12 @@ import org.jheaps.AddressableHeap;
 import org.jheaps.tree.PairingHeap;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -79,6 +81,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private Graph<ContractionVertex<V>, ContractionEdge<E>> maskedContractionGraph;
 
     private Object[] verticesArray;
+    private Object[] shortcutsArray;
     private VertexData[] dataArray;
 
     private AtomicInteger contractionLevelCounter;
@@ -91,7 +94,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private int parallelism;
 
     private List<IndependentSet> independentSetWorkers;
+    private List<Shortcuts> shortcutsWorkers;
     private List<VerticesContractor> contractorWorkers;
+    private List<Neighbours> neighboursWorkers;
 
 
     public ContractionHierarchyAlgorithm(Graph<V, E> graph) {
@@ -119,6 +124,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
         this.shortcutsSearchHeapSupplier = shortcutsSearchHeapSupplier;
 
         verticesArray = new Object[graph.vertexSet().size()];
+        shortcutsArray = new Object[graph.vertexSet().size()];
         dataArray = new VertexData[graph.vertexSet().size()];
 
         contractionLevelCounter = new AtomicInteger();
@@ -132,12 +138,16 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
 
         independentSetWorkers = new ArrayList<>(parallelism);
+        shortcutsWorkers = new ArrayList<>(parallelism);
         contractorWorkers = new ArrayList<>(parallelism);
+        neighboursWorkers = new ArrayList<>(parallelism);
         Set<Integer> ids = new ConcurrentSkipListSet<>();
         Set<Integer> levels = new ConcurrentSkipListSet<>();
         for (int i = 0; i < parallelism; ++i) {
             independentSetWorkers.add(new IndependentSet(i));
+            shortcutsWorkers.add(new Shortcuts(i));
             contractorWorkers.add(new VerticesContractor(i, ids, levels));
+            neighboursWorkers.add(new Neighbours(i));
         }
     }
 
@@ -146,44 +156,33 @@ public class ContractionHierarchyAlgorithm<V, E> {
             Map<V, ContractionVertex<V>>> computeContractionHierarchy() {
         System.out.println(graph.vertexSet().size());
         fillContractionGraphAndVerticesArray();
-        computeInitialPriorities();
-//        System.out.println("checking stuff");
-//        int cnt = 0;
-//        for (ContractionVertex<V> u : contractionGraph.vertexSet()) {
-//            System.out.println(cnt++);
-//            VertexData uData = dataArray[u.vertexId];
-//            for (ContractionVertex<V> v : contractionGraph.vertexSet()) {
-//                if(u.equals(v)){
-//                    continue;
-//                }
-//                VertexData vData = dataArray[v.vertexId];
-//                if (
-//                        !(
-//                                (isGreater(uData.priority, vData.priority, u.vertexId, v.vertexId) &&
-//                                        !isGreater(vData.priority, uData.priority, v.vertexId, u.vertexId)) ||
-//                                        (!isGreater(uData.priority, vData.priority, u.vertexId, v.vertexId) &&
-//                                                isGreater(vData.priority, uData.priority, v.vertexId, u.vertexId))
-//                        )
-//                ) {
-//                    System.out.println(u.vertex + " " + v.vertex);
-//                }
-//            }
+//        System.out.println("INITIAL");
+//
+//        int id = 1;
+//        ContractionVertex<V> contractionVertex1 = (ContractionVertex<V>) verticesArray[id];
+//        V vertex1 = contractionVertex1.vertex;
+//        System.out.println("vertex: " + vertex1);
+//        for (E e : graph.outgoingEdgesOf(vertex1)) {
+//            System.out.println("source: " + graph.getEdgeSource(e) + " target: " + graph.getEdgeTarget(e));
 //        }
+//        System.out.println();
+//
+//        System.out.println("contraction vertex: " + contractionVertex1);
+//        for (ContractionEdge<E> eg : contractionGraph.outgoingEdgesOf(contractionVertex1)) {
+//            System.out.println("source: " + contractionGraph.getEdgeSource(eg) + " target: " + contractionGraph.getEdgeTarget(eg));
+//        }
+//        System.out.println();
+//        System.out.println("contraction vertex: " + contractionVertex1);
+//        for (ContractionEdge<E> eg : contractionGraph.incomingEdgesOf(contractionVertex1)) {
+//            System.out.println("source: " + contractionGraph.getEdgeSource(eg) + " target: " + contractionGraph.getEdgeTarget(eg));
+//        }
+
+
+        computeInitialPriorities();
         contractVertices();
 
         markUpwardEdges();
         shutdownExecutor();
-
-//        Arrays.sort(verticesArray, Comparator.comparingInt(o -> ((ContractionVertex<V>) o).contractionLevel));
-
-//        for (Object o : verticesArray) {
-//            System.out.println(((ContractionVertex<V>) o).contractionLevel);
-//        }
-
-//        for (VertexData data : dataArray) {
-//            System.out.println(data.isContracted);
-//            assert data.isContracted;
-//        }
 
         return Pair.of(contractionGraph, contractionMapping);
     }
@@ -200,11 +199,11 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private void fillContractionGraphAndVerticesArray() {
-        int vertexIndex = 0;
+        int vertexId = 0;
         for (V vertex : graph.vertexSet()) {
-            ContractionVertex<V> contractionVertex = new ContractionVertex<>(vertex, vertexIndex);
-            verticesArray[vertexIndex] = contractionVertex;
-            ++vertexIndex;
+            ContractionVertex<V> contractionVertex = new ContractionVertex<>(vertex, vertexId);
+            verticesArray[vertexId] = contractionVertex;
+            ++vertexId;
 
             contractionGraph.addVertex(contractionVertex);
             contractionMapping.put(vertex, contractionVertex);
@@ -220,24 +219,37 @@ public class ContractionHierarchyAlgorithm<V, E> {
                 double eWeight = graph.getEdgeWeight(e);
 
                 ContractionEdge<E> oldEdge = contractionGraph.getEdge(contractionSource, contractionTarget);
+//                Set<ContractionEdge<E>> sourceIncoming = contractionGraph.incomingEdgesOf(contractionSource);
+//                Set<ContractionEdge<E>> sourceOutgoing = contractionGraph.outgoingEdgesOf(contractionSource);
+//                Set<ContractionEdge<E>> targetIncoming = contractionGraph.incomingEdgesOf(contractionTarget);
+//                Set<ContractionEdge<E>> targetOutgoing = contractionGraph.outgoingEdgesOf(contractionTarget);
                 if (oldEdge == null) {
                     ContractionEdge<E> forward = new ContractionEdge<>(e);
                     contractionGraph.addEdge(contractionSource, contractionTarget, forward);
                     contractionGraph.setEdgeWeight(forward, eWeight);
+//                    sourceIncoming = contractionGraph.incomingEdgesOf(contractionSource);
+//                    sourceOutgoing = contractionGraph.outgoingEdgesOf(contractionSource);
+//                    targetIncoming = contractionGraph.incomingEdgesOf(contractionTarget);
+//                    targetOutgoing = contractionGraph.outgoingEdgesOf(contractionTarget);
 
                     if (graph.getType().isUndirected()) {
                         ContractionEdge<E> backward = new ContractionEdge<>(e);
                         contractionGraph.addEdge(contractionTarget, contractionSource, backward);
                         contractionGraph.setEdgeWeight(backward, eWeight);
+//                        sourceIncoming = contractionGraph.incomingEdgesOf(contractionSource);
+//                        sourceOutgoing = contractionGraph.outgoingEdgesOf(contractionSource);
+//                        targetIncoming = contractionGraph.incomingEdgesOf(contractionTarget);
+//                        targetOutgoing = contractionGraph.outgoingEdgesOf(contractionTarget);
+
                     }
                 } else {
                     double oldWeight = contractionGraph.getEdgeWeight(oldEdge);
                     if (eWeight < oldWeight) {
                         contractionGraph.setEdgeWeight(oldEdge, eWeight);
-                    }
-                    if (graph.getType().isUndirected()) {
-                        contractionGraph.setEdgeWeight(
-                                contractionGraph.getEdge(contractionTarget, contractionSource), eWeight);
+                        if (graph.getType().isUndirected()) {
+                            contractionGraph.setEdgeWeight(
+                                    contractionGraph.getEdge(contractionTarget, contractionSource), eWeight);
+                        }
                     }
                 }
             }
@@ -252,95 +264,70 @@ public class ContractionHierarchyAlgorithm<V, E> {
         takeTasks(parallelism);
     }
 
+
     private void contractVertices() {
-        int notContractedVerticesEnd = graph.vertexSet().size();
         int independentSetStart;
+        int independentSetEnd = graph.vertexSet().size();
 
 
         int cnt = 0;
-        while (notContractedVerticesEnd != 0) {
-            computeIndependentSet(notContractedVerticesEnd);
+        while (independentSetEnd != 0) {
+            computeIndependentSet(independentSetEnd);
 
-            independentSetStart = partitionIndependentSet(notContractedVerticesEnd);
+            independentSetStart = partitionIndependentSet(independentSetEnd);
 
-            System.out.println(cnt++ + " " +
-                    independentSetStart + " " +
-                    notContractedVerticesEnd + " " +
-                    (notContractedVerticesEnd - independentSetStart));
 
-//            Set<Integer> verticesIds = new TreeSet<>();
-//            for (int i = independentSetStart; i < notContractedVerticesEnd; ++i) {
-//                verticesIds.add(((ContractionVertex<V>) verticesArray[i]).vertexId);
-//            }
-//            System.out.println("size: " + verticesIds.size());
-//            System.out.println(verticesIds);
-//            throw new RuntimeException();
+            System.out.println(cnt++ + " " + independentSetStart + " " + independentSetEnd + " " + (independentSetEnd - independentSetStart));
 
             for (int i = 0; i < independentSetStart; ++i) {
-//                System.out.println(dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent);
-                assert !dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted;
                 assert !dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent;
-            }
-            for (int i = independentSetStart; i < notContractedVerticesEnd; ++i) {
-//                System.out.println(dataArray[((ContractionVertex<V>) verticesArray[independentSetStart]).vertexId].isContracted);
                 assert !dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted;
-                assert dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent;
             }
-            for (int i = independentSetStart; i < notContractedVerticesEnd; ++i) {
+            for (int i = independentSetStart; i < independentSetEnd; ++i) {
+                assert dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent;
+                assert !dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted;
+            }
+            for (int i = independentSetStart; i < independentSetEnd; ++i) {
                 checkIndependent(i);
             }
 
-
-            contractIndependentSet(independentSetStart, notContractedVerticesEnd);
-            markContracted(independentSetStart, notContractedVerticesEnd);
+            computeShortcuts(independentSetStart, independentSetEnd);
+            System.out.println("shortcuts computed");
+            contractIndependentSet(independentSetStart, independentSetEnd);
+            System.out.println("independent set contracted");
+//            updateNeighbours(independentSetStart, independentSetEnd);
+//            System.out.println("neighbours updated");
+            markContracted(independentSetStart, independentSetEnd);
+            System.out.println("edges marked contracted");
 
             for (int i = 0; i < independentSetStart; ++i) {
-//                System.out.println(dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent);
                 assert !dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent;
                 assert !dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted;
             }
-//            System.out.println("pre results");
-            for (int i = independentSetStart; i < notContractedVerticesEnd; ++i) {
-//                System.out.println(dataArray[((ContractionVertex<V>) verticesArray[independentSetStart]).vertexId].isContracted);
+            for (int i = independentSetStart; i < independentSetEnd; ++i) {
                 assert dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isIndependent;
                 assert dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted;
-//                if (!dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted) {
-//                    System.out.println(((ContractionVertex<V>) verticesArray[i]).vertexId);
-//                }
             }
 
 
-//            Set<Integer> levels = contractorWorkers.get(0).levels;
-//            Set<Integer> ids = contractorWorkers.get(0).ids;
-//            System.out.println("levels size: " + levels.size());
-//            System.out.println("levels: " + levels);
-//            System.out.println("ids size: " + ids.size());
-//            System.out.println("ids: " + ids);
-//
-//            System.out.println("not contained levels");
-//            for (int level = 0; level < notContractedVerticesEnd - independentSetStart; ++level) {
-//                if (!levels.contains(level)) {
-//                    System.out.println(level);
-//                }
-//            }
-//
-//            System.out.println("not contained ids");
-//            for (int position = independentSetStart; position < notContractedVerticesEnd; ++position) {
-//                if (!ids.contains(((ContractionVertex<V>) verticesArray[position]).vertexId)) {
-//                    System.out.println(((ContractionVertex<V>) verticesArray[position]).vertexId);
-//                }
-//            }
-
-            notContractedVerticesEnd = independentSetStart;
-//            throw new RuntimeException();
+            independentSetEnd = independentSetStart;
         }
     }
 
+
+    private void markContracted(int independentSetStart, int independentSetEnd) {
+        for (int i = independentSetStart; i < independentSetEnd; ++i) {
+            dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted = true;
+        }
+    }
 
     private void checkIndependent(int pos) {
         ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[pos];
         VertexData vertexData = dataArray[vertex.vertexId];
         assert vertexData.isIndependent;
+        assert !vertexData.isContracted;
+        assert contractionGraph.containsVertex(vertex);
+        assert maskedContractionGraph.containsVertex(vertex);
 
         for (ContractionVertex<V> firstLevelNeighbour : Graphs.neighborSetOf(maskedContractionGraph, vertex)) {
 
@@ -367,7 +354,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
             }
         }
     }
-
 
     private void computeIndependentSet(int notContractedVerticesEnd) {
 //        Arrays.asList(verticesArray).subList(0, notContractedVerticesEnd).forEach(o -> {
@@ -414,9 +400,10 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private boolean tieBreaking(int vertexId1, int vertexId2) {
-//        System.out.println("tie breaking");
+//        if(dataArray[vertexId1].random != dataArray[vertexId2].random){
+//            return dataArray[vertexId1].random > dataArray[vertexId2].random;
+//        }
         return vertexId1 > vertexId2;
-//        return dataArray[vertexId1].random > dataArray[vertexId2].random;
 //        int hash1 = hashFunction.apply(vertexId1);
 //        int hash2 = hashFunction.apply(vertexId2);
 //
@@ -437,17 +424,35 @@ public class ContractionHierarchyAlgorithm<V, E> {
                 --right;
             }
             if (left <= right) {
-                // swap only vertices, because data is identified by vertex id
-                swap(dataArray, left, right);
-                swap(verticesArray, left, right);
                 @SuppressWarnings("unchecked")
                 ContractionVertex<V> leftVertex = (ContractionVertex<V>) verticesArray[left];
                 @SuppressWarnings("unchecked")
                 ContractionVertex<V> rightVertex = (ContractionVertex<V>) verticesArray[right];
+
+                swap(dataArray, left, right);
+                assert contractionGraph.containsVertex(leftVertex);
+                assert contractionGraph.containsVertex(rightVertex);
+                assert maskedContractionGraph.containsVertex(leftVertex);
+                assert maskedContractionGraph.containsVertex(rightVertex);
+                swap(verticesArray, left, right);
+                assert contractionGraph.containsVertex(leftVertex);
+                assert contractionGraph.containsVertex(rightVertex);
+                assert maskedContractionGraph.containsVertex(leftVertex);
+                assert maskedContractionGraph.containsVertex(rightVertex);
+                swap(shortcutsArray, left, right);
+                assert contractionGraph.containsVertex(leftVertex);
+                assert contractionGraph.containsVertex(rightVertex);
+                assert maskedContractionGraph.containsVertex(leftVertex);
+                assert maskedContractionGraph.containsVertex(rightVertex);
                 int tmpId = leftVertex.vertexId;
                 leftVertex.vertexId = rightVertex.vertexId;
                 rightVertex.vertexId = tmpId;
+                assert contractionGraph.containsVertex(leftVertex);
+                assert contractionGraph.containsVertex(rightVertex);
+                assert maskedContractionGraph.containsVertex(leftVertex);
+                assert maskedContractionGraph.containsVertex(rightVertex);
             }
+
         }
         return left;
     }
@@ -458,13 +463,23 @@ public class ContractionHierarchyAlgorithm<V, E> {
         array[j] = tmp;
     }
 
+
+    private void computeShortcuts(int independentSetStart, int independentSetEnd) {
+        for (Shortcuts worker : shortcutsWorkers) {
+            worker.independentSetStart = independentSetStart;
+            worker.independentSetEnd = independentSetEnd;
+            completionService.submit(worker, null);
+        }
+        takeTasks(parallelism);
+    }
+
+
     private void contractIndependentSet(int independentSetStart, int independentSetEnd) {
 //        Arrays.asList(verticesArray).subList(independentSetStart, independentSetEnd).forEach(o -> {
 //            @SuppressWarnings("unchecked")
 //            ContractionVertex<V> vertex = (ContractionVertex<V>) o;
 //            contractVertex(vertex, contractionLevelCounter.getAndIncrement());
 //        });
-//        System.out.println("start: " + independentSetStart + " end: " + independentSetEnd);
         for (VerticesContractor worker : contractorWorkers) {
             worker.independentSetStart = independentSetStart;
             worker.independentSetEnd = independentSetEnd;
@@ -476,43 +491,86 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private void contractVertex(ContractionVertex<V> vertex, int contractionLevel) {
         assert !dataArray[vertex.vertexId].isContracted;
         assert dataArray[vertex.vertexId].isIndependent;
-        // compute shortcuts
-        List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts = getShortcuts(vertex);
 
-        // add shortcuts
-        for (Pair<ContractionEdge<E>, ContractionEdge<E>> shortcut : shortcuts) {
-            ContractionVertex<V> shortcutSource = contractionGraph.getEdgeSource(shortcut.getFirst());
-            ContractionVertex<V> shortcutTarget = contractionGraph.getEdgeTarget(shortcut.getSecond());
-            ContractionEdge<E> shortcutEdge = new ContractionEdge<>(shortcut);
+        @SuppressWarnings("unchecked")
+        List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts
+                = (List<Pair<ContractionEdge<E>, ContractionEdge<E>>>) shortcutsArray[vertex.vertexId];
+        shortcutsArray[vertex.vertexId] = null;
+        VertexData data = dataArray[vertex.vertexId];
+        try {
+            for (Pair<ContractionEdge<E>, ContractionEdge<E>> shortcut : shortcuts) {
+                assert maskedContractionGraph.getEdgeTarget(shortcut.getFirst()).equals(vertex);
+                assert maskedContractionGraph.getEdgeSource(shortcut.getSecond()).equals(vertex);
 
-            boolean added = contractionGraph.addEdge(shortcutSource, shortcutTarget, shortcutEdge);
-            double weight = contractionGraph.getEdgeWeight(shortcut.getFirst())
-                    + contractionGraph.getEdgeWeight(shortcut.getSecond());
-            if (added) {
-                contractionGraph.setEdgeWeight(shortcutEdge, weight);
-            } else {
-                contractionGraph.setEdgeWeight(contractionGraph.getEdge(shortcutSource, shortcutTarget), weight);
+                assert maskedContractionGraph.containsEdge(shortcut.getFirst());
+                assert maskedContractionGraph.containsEdge(shortcut.getSecond());
             }
+
+            // add shortcuts
+            for (Pair<ContractionEdge<E>, ContractionEdge<E>> shortcut : shortcuts) {
+                ContractionVertex<V> shortcutSource = maskedContractionGraph.getEdgeSource(shortcut.getFirst());
+                ContractionVertex<V> shortcutTarget = maskedContractionGraph.getEdgeTarget(shortcut.getSecond());
+                assert maskedContractionGraph.containsEdge(shortcut.getFirst());
+                assert maskedContractionGraph.containsEdge(shortcut.getSecond());
+                ContractionEdge<E> shortcutEdge = new ContractionEdge<>(shortcut);
+                assert maskedContractionGraph.containsEdge(shortcut.getFirst());
+                assert maskedContractionGraph.containsEdge(shortcut.getSecond());
+
+                boolean added = contractionGraph.addEdge(shortcutSource, shortcutTarget, shortcutEdge);
+
+                assert maskedContractionGraph.containsEdge(shortcut.getFirst());
+                assert maskedContractionGraph.containsEdge(shortcut.getSecond());
+
+                double weight = maskedContractionGraph.getEdgeWeight(shortcut.getFirst())
+                        + maskedContractionGraph.getEdgeWeight(shortcut.getSecond());
+
+                assert maskedContractionGraph.containsEdge(shortcut.getFirst());
+                assert maskedContractionGraph.containsEdge(shortcut.getSecond());
+
+                if (added) {
+                    contractionGraph.setEdgeWeight(shortcutEdge, weight);
+                } else {
+                    contractionGraph.setEdgeWeight(contractionGraph.getEdge(shortcutSource, shortcutTarget), weight);
+                }
+
+                assert maskedContractionGraph.containsEdge(shortcut.getFirst());
+                assert maskedContractionGraph.containsEdge(shortcut.getSecond());
+            }
+        } catch (Throwable e) {
+            for (Pair<ContractionEdge<E>, ContractionEdge<E>> sh : shortcuts) {
+                System.out.println(sh);
+            }
+            throw e;
         }
 
-        Set<ContractionVertex<V>> neighbours = Graphs.neighborSetOf(maskedContractionGraph, vertex);
+
+        for (ContractionVertex<V> neighbour : Graphs.neighborSetOf(maskedContractionGraph, vertex)) {
+            VertexData neighbourData = dataArray[neighbour.vertexId];
+            data.depth = Math.max(data.depth + 1, neighbourData.depth);
+        }
+
 
         // update vertex data
         vertex.contractionLevel = contractionLevel;
-        updateVertexDataAndNeighboursPriorities(dataArray[vertex.vertexId], neighbours);
     }
 
-    private void updateVertexDataAndNeighboursPriorities(VertexData vertexData, Set<ContractionVertex<V>> neighbours) {
+
+    private void updateNeighbours(int independentSetStart, int independentSetEnd) {
+        for (Neighbours worker : neighboursWorkers) {
+            worker.independentSetStart = independentSetStart;
+            worker.independentSetEnd = independentSetEnd;
+            completionService.submit(worker, null);
+        }
+        takeTasks(parallelism);
+    }
+
+    private void updateNeighboursPriorities(ContractionVertex<V> vertex) {
+        assert dataArray[vertex.vertexId].isIndependent;
+        assert !dataArray[vertex.vertexId].isContracted;
+        Set<ContractionVertex<V>> neighbours = Graphs.neighborSetOf(maskedContractionGraph, vertex);
         for (ContractionVertex<V> neighbour : neighbours) {
             VertexData neighbourData = dataArray[neighbour.vertexId];
-            vertexData.depth = Math.max(vertexData.depth + 1, neighbourData.depth);
             updatePriority(neighbour, neighbourData);
-        }
-    }
-
-    private void markContracted(int independentSetStart, int independentSetEnd) {
-        for (int position = independentSetStart; position < independentSetEnd; ++position) {
-            dataArray[position].isContracted = true;
         }
     }
 
@@ -559,17 +617,36 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
     private void iterateShortcuts(ContractionVertex<V> vertex,
                                   BiConsumer<ContractionEdge<E>, ContractionEdge<E>> shortcutConsumer) {
+//        System.out.println(Thread.currentThread().getId() + " vertex: " + vertex);
         Set<ContractionVertex<V>> successors = new HashSet<>();
-
+        Map<ContractionVertex<V>, ContractionEdge<E>> edgesMap = new HashMap<>();
         double maxOutgoingEdgeWeight = Double.MIN_VALUE;
         for (ContractionEdge<E> outEdge : maskedContractionGraph.outgoingEdgesOf(vertex)) {
-            successors.add(contractionGraph.getEdgeTarget(outEdge));
+
+//            ContractionVertex<V> vD = maskedContractionGraph.getEdgeSource(outEdge);
+            ContractionVertex<V> successor = maskedContractionGraph.getEdgeTarget(outEdge);
+
+//            System.out.println(Thread.currentThread().getId() + " source: " + vD + " target: " + successor);
+            if (dataArray[successor.vertexId] != null) {
+                if (dataArray[successor.vertexId].isIndependent) {
+                    continue;
+                }
+            }
+            assert contractionGraph.containsEdge(vertex, successor);
+
+            successors.add(successor);
             maxOutgoingEdgeWeight = Math.max(maxOutgoingEdgeWeight, contractionGraph.getEdgeWeight(outEdge));
+
+            edgesMap.put(successor, outEdge);
         }
 
 
         for (ContractionEdge<E> inEdge : maskedContractionGraph.incomingEdgesOf(vertex)) {
             ContractionVertex<V> predecessor = contractionGraph.getEdgeSource(inEdge);
+            if (dataArray[predecessor.vertexId] != null &&
+                    dataArray[predecessor.vertexId].isIndependent) {
+                continue;
+            }
 
             boolean containedPredecessor = successors.remove(predecessor); // might contain the predecessor vertex itself
 
@@ -580,28 +657,53 @@ public class ContractionHierarchyAlgorithm<V, E> {
                             vertex,
                             contractionGraph.getEdgeWeight(inEdge) + maxOutgoingEdgeWeight);
 
-
             for (ContractionVertex<V> successor : successors) {
-                ContractionEdge<E> outEdge;
-                try {
-                    outEdge = contractionGraph.getEdge(vertex, successor);
-                } catch (NullPointerException e) {
-                    System.out.println("vertex: " + vertex);
-                    System.out.println("successor: " + successor);
-                    System.out.println("contains: " + contractionGraph.containsEdge(vertex, successor));
-                    throw e;
+                ContractionEdge<E> outEdge = contractionGraph.getEdge(vertex, successor);
+                assert contractionGraph.containsVertex(vertex);
+                assert contractionGraph.containsVertex(successor);
+                if (!contractionGraph.containsEdge(vertex, successor)) {
+                    assert contractionGraph.outgoingEdgesOf(vertex).contains(edgesMap.get(successor));
+                    assert contractionGraph.containsEdge(edgesMap.get(successor));
+                    assert contractionGraph.getEdgeTarget(edgesMap.get(successor)).equals(successor);
+                    System.out.println(Thread.currentThread().getId() + " predecessor: " + predecessor);
+                    System.out.println(Thread.currentThread().getId() + " vertex: " + vertex);
+                    System.out.println(Thread.currentThread().getId() + " successor: " + successor);
+                    System.out.println(Thread.currentThread().getId() + " initial edge: " + edgesMap.get(successor).hashCode() + " " + edgesMap.get(successor));
+                    System.out.println("initial edge source: " + contractionGraph.getEdgeSource(edgesMap.get(successor)));
+                    System.out.println("initial edge target: " + contractionGraph.getEdgeTarget(edgesMap.get(successor)));
+                    for (ContractionEdge<E> edge : contractionGraph.outgoingEdgesOf(vertex)) {
+                        if (edge.equals(edgesMap.get(successor))) {
+                            System.out.println(Thread.currentThread().getId() + " this: " + edge.hashCode() + " " + edge);
+                        } else {
+                            System.out.println(Thread.currentThread().getId() + " not this: " + edge.hashCode() + " " + edge);
+                        }
+                    }
+                    System.out.println(Thread.currentThread().getId() + " edgeMap:");
+                    for (Map.Entry<ContractionVertex<V>, ContractionEdge<E>> e : edgesMap.entrySet()) {
+                        System.out.println(Thread.currentThread().getId() + " successor: " + e.getKey() + " edge: " + e.getValue());
+                    }
+                    assert contractionGraph.containsEdge(vertex, successor);
                 }
                 double pathWeight = 0;
                 pathWeight += contractionGraph.getEdgeWeight(inEdge);
                 pathWeight += contractionGraph.getEdgeWeight(outEdge);
 
                 if (!distances.containsKey(successor) || distances.get(successor).getKey() > pathWeight) {
+                    assert dataArray[predecessor.vertexId] == null || !dataArray[predecessor.vertexId].isIndependent;
+                    assert dataArray[successor.vertexId] == null || !dataArray[successor.vertexId].isIndependent;
+                    assert contractionGraph.containsEdge(inEdge);
+                    assert contractionGraph.containsEdge(outEdge);
+                    assert maskedContractionGraph.containsEdge(inEdge);
+                    assert maskedContractionGraph.containsEdge(outEdge);
                     shortcutConsumer.accept(inEdge, outEdge);
                     if (graph.getType().isUndirected()) {
-                        shortcutConsumer.accept(
-                                contractionGraph.getEdge(successor, vertex),
-                                contractionGraph.getEdge(vertex, predecessor)
-                        );
+                        ContractionEdge<E> e1 = contractionGraph.getEdge(successor, vertex);
+                        ContractionEdge<E> e2 = contractionGraph.getEdge(vertex, predecessor);
+                        assert contractionGraph.containsEdge(e1);
+                        assert contractionGraph.containsEdge(e2);
+                        assert maskedContractionGraph.containsEdge(e1);
+                        assert maskedContractionGraph.containsEdge(e2);
+                        shortcutConsumer.accept(e1, e2);
                     }
                 }
             }
@@ -690,12 +792,17 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private void takeTasks(int numOfTasks) {
+        boolean errorOccurred = false;
         for (int i = 0; i < numOfTasks; ++i) {
             try {
                 completionService.take().get();
             } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
+                errorOccurred = true;
             }
+        }
+        if (errorOccurred) {
+            throw new RuntimeException();
         }
     }
 
@@ -726,6 +833,28 @@ public class ContractionHierarchyAlgorithm<V, E> {
             this.vertexId = vertexId;
             this.vertex = vertex;
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ContractionVertex<?> that = (ContractionVertex<?>) o;
+            return Objects.equals(vertex, that.vertex);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(vertex);
+        }
+
+        @Override
+        public String toString() {
+            return "ContractionVertex{" +
+                    "vertexId=" + vertexId +
+                    ", vertex=" + vertex +
+                    ", contractionLevel=" + contractionLevel +
+                    '}';
+        }
     }
 
     public static class ContractionEdge<E1> {
@@ -743,11 +872,38 @@ public class ContractionHierarchyAlgorithm<V, E> {
             this.skippedEdges = skippedEdges;
             this.originalEdges = skippedEdges.getFirst().originalEdges + skippedEdges.getSecond().originalEdges;
         }
+
+        @Override
+        public String toString() {
+            return "ContractionEdge{" +
+                    "edge=" + edge +
+                    ", skippedEdges=" + skippedEdges +
+                    ", isUpward=" + isUpward +
+                    ", originalEdges=" + originalEdges +
+                    '}';
+        }
+
+       /* @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ContractionEdge<?> that = (ContractionEdge<?>) o;
+            return originalEdges == that.originalEdges &&
+                    Objects.equals(edge, that.edge) &&
+                    Objects.equals(skippedEdges, that.skippedEdges);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(edge, skippedEdges, originalEdges);
+        }
+*/
     }
 
 
     private class ToListConsumer implements BiConsumer<ContractionEdge<E>, ContractionEdge<E>> {
         List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts;
+        Set<Pair<ContractionEdge<E>, ContractionEdge<E>>> set = new HashSet<>();
 
         ToListConsumer() {
             shortcuts = new ArrayList<>();
@@ -756,6 +912,10 @@ public class ContractionHierarchyAlgorithm<V, E> {
         @Override
         public void accept(ContractionEdge<E> e1, ContractionEdge<E> e2) {
             shortcuts.add(Pair.of(e1, e2));
+            set.add(Pair.of(e1, e2));
+            if (set.contains(Pair.of(e2, e1))) {
+                System.out.println("reverse shortcut");
+            }
         }
     }
 
@@ -815,6 +975,27 @@ public class ContractionHierarchyAlgorithm<V, E> {
         }
     }
 
+    private class Shortcuts implements Runnable {
+        int workerId;
+        int independentSetStart;
+        int independentSetEnd;
+
+        public Shortcuts(int workerId) {
+            this.workerId = workerId;
+        }
+
+        @Override
+        public void run() {
+            int start = workerSegmentStart(independentSetStart, independentSetEnd, workerId);
+            int end = workerSegmentEnd(independentSetStart, independentSetEnd, workerId);
+            for (int vertexIndex = start; vertexIndex < end; ++vertexIndex) {
+                @SuppressWarnings("unchecked")
+                ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
+                shortcutsArray[vertex.vertexId] = getShortcuts(vertex);
+            }
+        }
+    }
+
     private class VerticesContractor implements Runnable {
         int workerId;
         int independentSetStart;
@@ -830,24 +1011,37 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
         @Override
         public void run() {
-//            System.out.println(workerId + " start");
             int start = workerSegmentStart(independentSetStart, independentSetEnd, workerId);
             int end = workerSegmentEnd(independentSetStart, independentSetEnd, workerId);
             for (int vertexIndex = start; vertexIndex < end; ++vertexIndex) {
                 @SuppressWarnings("unchecked")
                 ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
                 int level = contractionLevelCounter.getAndIncrement();
-                if (ids.contains(vertex.vertexId)) {
-                    throw new IllegalArgumentException("lol");
-                }
                 ids.add(vertex.vertexId);
                 levels.add(level);
-//                System.out.println(vertex.vertexId + " " + level);
                 contractVertex(vertex, level);
             }
-//            System.out.println("ids size: " + ids.size());
-//            System.out.println(ids);
-//            System.out.println(workerId + " finished");
+        }
+    }
+
+    private class Neighbours implements Runnable {
+        int workerId;
+        int independentSetStart;
+        int independentSetEnd;
+
+        public Neighbours(int workerId) {
+            this.workerId = workerId;
+        }
+
+        @Override
+        public void run() {
+            int start = workerSegmentStart(independentSetStart, independentSetEnd, workerId);
+            int end = workerSegmentEnd(independentSetStart, independentSetEnd, workerId);
+            for (int vertexIndex = start; vertexIndex < end; ++vertexIndex) {
+                @SuppressWarnings("unchecked")
+                ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
+                updateNeighboursPriorities(vertex);
+            }
         }
     }
 
