@@ -38,7 +38,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -93,7 +92,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
     private List<ContractionTask> tasks;
 
-    private Consumer<ContractionVertex<V>> computeInitialPrioritiesConsumer;
+    private List<Consumer<ContractionVertex<V>>> computeInitialPrioritiesConsumers;
     private Consumer<ContractionVertex<V>> computeIndependentSetConsumer;
     private Consumer<ContractionVertex<V>> computeShortcutsConsumer;
     private Consumer<ContractionVertex<V>> updateNeighboursConsumer;
@@ -137,11 +136,20 @@ public class ContractionHierarchyAlgorithm<V, E> {
         completionService = new ExecutorCompletionService<>(executor);
 
         tasks = new ArrayList<>(parallelism);
+        computeInitialPrioritiesConsumers = new ArrayList<>(parallelism);
         for (int i = 0; i < parallelism; ++i) {
             tasks.add(new ContractionTask(i));
+            computeInitialPrioritiesConsumers.add(new Consumer<ContractionVertex<V>>() {
+                Random random = randomSupplier.get();
+
+                @Override
+                public void accept(ContractionVertex<V> vertex) {
+                    dataArray[vertex.vertexId] = getPriority(vertex, random.nextInt());
+                }
+            });
         }
 
-        computeInitialPrioritiesConsumer = vertex -> dataArray[vertex.vertexId] = getPriority(vertex);
+
         computeIndependentSetConsumer = vertex -> dataArray[vertex.vertexId].isIndependent = vertexIsIndependent(vertex);
         computeShortcutsConsumer = vertex -> shortcutsArray[vertex.vertexId] = getShortcuts(vertex);
         updateNeighboursConsumer = vertex -> updateNeighboursPriorities(vertex);
@@ -153,7 +161,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
     public Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>, Map<V, ContractionVertex<V>>> computeContractionHierarchy() {
         fillContractionGraphAndVerticesArray();
-        submitTasks(0, contractionGraph.vertexSet().size(), computeInitialPrioritiesConsumer);
+        submitTasks(0, contractionGraph.vertexSet().size(), computeInitialPrioritiesConsumers);
 
         contractVertices();
 
@@ -369,8 +377,8 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
 
-    private VertexData getPriority(ContractionVertex<V> vertex) {
-        VertexData result = new VertexData();
+    private VertexData getPriority(ContractionVertex<V> vertex, int random) {
+        VertexData result = new VertexData(random);
         updatePriority(vertex, result);
         return result;
     }
@@ -543,6 +551,17 @@ public class ContractionHierarchyAlgorithm<V, E> {
         takeTasks(tasks.size());
     }
 
+    private void submitTasks(int segmentStart, int segmentEnd, List<Consumer<ContractionVertex<V>>> consumers) {
+        for (int i = 0; i < tasks.size(); ++i) {
+            ContractionTask task = tasks.get(i);
+            task.consumer = consumers.get(i);
+            task.segmentStart = segmentStart;
+            task.segmentsEnd = segmentEnd;
+            completionService.submit(task, null);
+        }
+        takeTasks(tasks.size());
+    }
+
     private void takeTasks(int numOfTasks) {
         for (int i = 0; i < numOfTasks; ++i) {
             try {
@@ -694,8 +713,8 @@ public class ContractionHierarchyAlgorithm<V, E> {
         boolean isIndependent;
         int random;
 
-        VertexData() {
-            random = ThreadLocalRandom.current().nextInt();
+        VertexData(int random) {
+            random = random;
         }
     }
 
