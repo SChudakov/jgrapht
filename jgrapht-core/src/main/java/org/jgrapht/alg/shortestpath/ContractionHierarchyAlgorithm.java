@@ -115,8 +115,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
         this(graph, parallelism, randomSupplier, PairingHeap::new);
     }
 
-    public ContractionHierarchyAlgorithm(Graph<V, E> graph, int parallelism,
-                                         Supplier<Random> randomSupplier,
+    public ContractionHierarchyAlgorithm(Graph<V, E> graph, int parallelism, Supplier<Random> randomSupplier,
                                          Supplier<AddressableHeap<Double, ContractionVertex<V>>> shortcutsSearchHeapSupplier) {
         this.graph = graph;
         this.contractionGraph = createContractionGraph();
@@ -247,13 +246,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
             markContracted(independentSetStart, independentSetEnd);
 
             independentSetEnd = independentSetStart;
-        }
-    }
-
-
-    private void markContracted(int independentSetStart, int independentSetEnd) {
-        for (int i = independentSetStart; i < independentSetEnd; ++i) {
-            dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted = true;
         }
     }
 
@@ -472,6 +464,13 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
 
+    private void markContracted(int independentSetStart, int independentSetEnd) {
+        for (int i = independentSetStart; i < independentSetEnd; ++i) {
+            dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted = true;
+        }
+    }
+
+
     private Map<ContractionVertex<V>, AddressableHeap.Handle<Double, ContractionVertex<V>>>
     iterateToSuccessors(Graph<ContractionVertex<V>, ContractionEdge<E>> graph,
                         ContractionVertex<V> source,
@@ -539,6 +538,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
             node.decreaseKey(distance);
         }
     }
+
+
+
 
 
     private void submitTasks(int segmentStart, int segmentEnd, Consumer<ContractionVertex<V>> consumer) {
