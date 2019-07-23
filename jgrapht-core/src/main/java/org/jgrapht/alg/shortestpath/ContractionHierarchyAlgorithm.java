@@ -85,7 +85,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private VertexData[] dataArray;
 
     private AtomicInteger contractionLevelCounter;
-    private Function<Integer, Integer> hashFunction;
 
     private Supplier<AddressableHeap<Double, ContractionVertex<V>>> shortcutsSearchHeapSupplier;
 
@@ -97,7 +96,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private List<Shortcuts> shortcutsWorkers;
     private List<Neighbours> neighboursWorkers;
 
-    private AtomicInteger numOfShortcuts;
 
 
     public ContractionHierarchyAlgorithm(Graph<V, E> graph) {
@@ -129,7 +127,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         dataArray = new VertexData[graph.vertexSet().size()];
 
         contractionLevelCounter = new AtomicInteger();
-        hashFunction = new HashFunction(randomSupplier.get());
 
         maskedContractionGraph = new MaskSubgraph<>(contractionGraph,
                 v -> dataArray[v.vertexId] != null && dataArray[v.vertexId].isContracted, e -> false);
@@ -239,8 +236,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
             independentSetStart = partitionIndependentSet(independentSetEnd);
 
-
-            System.out.println(cnt++ + " " + independentSetStart + " " + independentSetEnd + " " + (independentSetEnd - independentSetStart));
+//            System.out.println(cnt++ + " " + independentSetStart + " " + independentSetEnd + " " + (independentSetEnd - independentSetStart));
 
             computeShortcuts(independentSetStart, independentSetEnd);
             contractIndependentSet(independentSetStart, independentSetEnd);
@@ -298,13 +294,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
             return dataArray[vertexId1].random > dataArray[vertexId2].random;
         }
         return vertexId1 > vertexId2;
-//        int hash1 = hashFunction.apply(vertexId1);
-//        int hash2 = hashFunction.apply(vertexId2);
-//
-//        if (hash1 != hash2) {
-//            return hash1 < hash2;
-//        }
-//        return vertexId1 < vertexId2;
     }
 
     private int partitionIndependentSet(int notContractedVerticesEnd) {
@@ -343,14 +332,12 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
 
     private void computeShortcuts(int independentSetStart, int independentSetEnd) {
-        numOfShortcuts = new AtomicInteger();
         for (Shortcuts worker : shortcutsWorkers) {
             worker.independentSetStart = independentSetStart;
             worker.independentSetEnd = independentSetEnd;
             completionService.submit(worker, null);
         }
         takeTasks(parallelism);
-        System.out.println("num of shortcuts: " + numOfShortcuts);
     }
 
 
@@ -759,7 +746,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
                 @SuppressWarnings("unchecked")
                 ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
                 List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts = getShortcuts(vertex);
-                numOfShortcuts.addAndGet(shortcuts.size());
                 shortcutsArray[vertex.vertexId] = shortcuts;
             }
         }
@@ -828,45 +814,5 @@ public class ContractionHierarchyAlgorithm<V, E> {
         int removedContractionEdges;
         int addedOriginalEdges;
         int removeOriginalEdges;
-    }
-
-
-    private static class HashFunction implements Function<Integer, Integer> {
-        Random random;
-
-        private short[] firstLookup;
-        private short[] secondLookup;
-
-        HashFunction(Random random) {
-            this.random = random;
-            int size = 1 << 16;
-            firstLookup = new short[size];
-            secondLookup = new short[size];
-            for (int i = 0; i < size; ++i) {
-                firstLookup[i] = (short) i;
-                secondLookup[i] = (short) i;
-            }
-            randomShuffle(firstLookup);
-            randomShuffle(secondLookup);
-        }
-
-        private void randomShuffle(short[] array) {
-            for (int i = array.length - 1; i >= 0; i--) {
-                int position = random.nextInt(i + 1);
-
-                short tmp = array[position];
-                array[position] = array[i];
-                array[i] = tmp;
-            }
-        }
-
-        @Override
-        public Integer apply(Integer integer) {
-            int firstPart = (integer & 0xffff);
-            int secondPart = (integer >> 16);
-
-
-            return firstLookup[firstPart] ^ secondLookup[secondPart];
-        }
     }
 }
