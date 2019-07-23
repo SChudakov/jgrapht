@@ -716,7 +716,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
         int random;
 
         VertexData(int random) {
-            random = random;
+            this.random = random;
         }
     }
 
