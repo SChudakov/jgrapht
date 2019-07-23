@@ -80,7 +80,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
     private Object[] verticesArray;
     private Object[] shortcutsArray;
-    private VertexData[] dataArray;
+    private VertexData[] verticesDataArray;
 
     private AtomicInteger contractionLevelCounter;
 
@@ -124,13 +124,14 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
         verticesArray = new Object[graph.vertexSet().size()];
         shortcutsArray = new Object[graph.vertexSet().size()];
-        dataArray = new VertexData[graph.vertexSet().size()];
+        verticesDataArray = new VertexData[graph.vertexSet().size()];
 
         contractionLevelCounter = new AtomicInteger();
 
         maskedContractionGraph = new MaskSubgraph<>(contractionGraph,
-                v -> dataArray[v.vertexId] != null && dataArray[v.vertexId].isContracted, e -> false);
+                v -> verticesDataArray[v.vertexId] != null && verticesDataArray[v.vertexId].isContracted, e -> false);
         contractionMapping = new HashMap<>();
+
         executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         completionService = new ExecutorCompletionService<>(executor);
 
@@ -143,13 +144,13 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
                 @Override
                 public void accept(ContractionVertex<V> vertex) {
-                    dataArray[vertex.vertexId] = getPriority(vertex, random.nextInt());
+                    verticesDataArray[vertex.vertexId] = getPriority(vertex, random.nextInt());
                 }
             });
         }
 
 
-        computeIndependentSetConsumer = vertex -> dataArray[vertex.vertexId].isIndependent = vertexIsIndependent(vertex);
+        computeIndependentSetConsumer = vertex -> verticesDataArray[vertex.vertexId].isIndependent = vertexIsIndependent(vertex);
         computeShortcutsConsumer = vertex -> shortcutsArray[vertex.vertexId] = getShortcuts(vertex);
         updateNeighboursConsumer = vertex -> updateNeighboursPriorities(vertex);
         markUpwardEdgesConsumer = vertex -> contractionGraph.outgoingEdgesOf(vertex).forEach(
@@ -158,7 +159,8 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
 
-    public Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>, Map<V, ContractionVertex<V>>> computeContractionHierarchy() {
+    public Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>, Map<V, ContractionVertex<V>>>
+    computeContractionHierarchy() {
         fillContractionGraphAndVerticesArray();
         submitTasks(0, contractionGraph.vertexSet().size(), computeInitialPrioritiesConsumers);
 
@@ -172,9 +174,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
 
     private Graph<ContractionVertex<V>, ContractionEdge<E>> createContractionGraph() {
-        GraphTypeBuilder<ContractionVertex<V>, ContractionEdge<E>> resultBuilder = GraphTypeBuilder.directed();
-
-        return resultBuilder
+        return GraphTypeBuilder.<ContractionVertex<V>, ContractionEdge<E>>directed()
                 .weighted(true)
                 .allowingMultipleEdges(false)
                 .allowingSelfLoops(false)
@@ -196,9 +196,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
             V source = graph.getEdgeSource(e);
             V target = graph.getEdgeTarget(e);
             if (!source.equals(target)) {
-
                 ContractionVertex<V> contractionSource = contractionMapping.get(source);
                 ContractionVertex<V> contractionTarget = contractionMapping.get(target);
+
                 double eWeight = graph.getEdgeWeight(e);
 
                 ContractionEdge<E> oldEdge = contractionGraph.getEdge(contractionSource, contractionTarget);
@@ -231,14 +231,10 @@ public class ContractionHierarchyAlgorithm<V, E> {
         int independentSetStart;
         int independentSetEnd = graph.vertexSet().size();
 
-
-        int cnt = 0;
         while (independentSetEnd != 0) {
             submitTasks(0, independentSetEnd, computeIndependentSetConsumer);
 
             independentSetStart = partitionIndependentSet(independentSetEnd);
-
-//            System.out.println(cnt++ + " " + segmentStart + " " + segmentsEnd + " " + (segmentsEnd - segmentStart));
 
             submitTasks(independentSetStart, independentSetEnd, computeShortcutsConsumer);
             contractIndependentSet(independentSetStart, independentSetEnd);
@@ -251,9 +247,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
 
     private boolean vertexIsIndependent(ContractionVertex<V> vertex) {
-        double vertexPriority = dataArray[vertex.vertexId].priority;
+        double vertexPriority = verticesDataArray[vertex.vertexId].priority;
         for (ContractionVertex<V> firstLevelNeighbour : Graphs.neighborSetOf(maskedContractionGraph, vertex)) {
-            double firstLevelPriority = dataArray[firstLevelNeighbour.vertexId].priority;
+            double firstLevelPriority = verticesDataArray[firstLevelNeighbour.vertexId].priority;
             if (isGreater(vertexPriority, firstLevelPriority, vertex.vertexId, firstLevelNeighbour.vertexId)) {
                 return false;
             }
@@ -261,8 +257,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
             for (ContractionVertex<V> secondLevelNeighbour :
                     Graphs.neighborSetOf(maskedContractionGraph, firstLevelNeighbour)) {
                 if (!secondLevelNeighbour.equals(vertex)) {
-                    double secondLevelPriority = dataArray[secondLevelNeighbour.vertexId].priority;
-                    if (isGreater(vertexPriority, secondLevelPriority, vertex.vertexId, secondLevelNeighbour.vertexId)) {
+                    double secondLevelPriority = verticesDataArray[secondLevelNeighbour.vertexId].priority;
+                    if (isGreater(vertexPriority, secondLevelPriority,
+                            vertex.vertexId, secondLevelNeighbour.vertexId)) {
                         return false;
                     }
                 }
@@ -277,8 +274,8 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private boolean tieBreaking(int vertexId1, int vertexId2) {
-        if (dataArray[vertexId1].random != dataArray[vertexId2].random) {
-            return dataArray[vertexId1].random > dataArray[vertexId2].random;
+        if (verticesDataArray[vertexId1].random != verticesDataArray[vertexId2].random) {
+            return verticesDataArray[vertexId1].random > verticesDataArray[vertexId2].random;
         }
         return vertexId1 > vertexId2;
     }
@@ -288,10 +285,10 @@ public class ContractionHierarchyAlgorithm<V, E> {
         int left = 0;
         int right = notContractedVerticesEnd - 1;
         while (left <= right) {
-            while (!dataArray[left].isIndependent) {
+            while (!verticesDataArray[left].isIndependent) {
                 ++left;
             }
-            while (right >= 0 && dataArray[right].isIndependent) {
+            while (right >= 0 && verticesDataArray[right].isIndependent) {
                 --right;
             }
             if (left <= right) {
@@ -300,7 +297,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
                 @SuppressWarnings("unchecked")
                 ContractionVertex<V> rightVertex = (ContractionVertex<V>) verticesArray[right];
 
-                swap(dataArray, left, right);
+                swap(verticesDataArray, left, right);
                 swap(verticesArray, left, right);
                 swap(shortcutsArray, left, right);
                 int tmpId = leftVertex.vertexId;
@@ -320,20 +317,17 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
 
     private void contractIndependentSet(int independentSetStart, int independentSetEnd) {
-        Arrays.asList(verticesArray).subList(independentSetStart, independentSetEnd).forEach(o -> {
+        Arrays.asList(verticesArray).subList(independentSetStart, independentSetEnd).forEach(v -> {
             @SuppressWarnings("unchecked")
-            ContractionVertex<V> vertex = (ContractionVertex<V>) o;
+            ContractionVertex<V> vertex = (ContractionVertex<V>) v;
             contractVertex(vertex, contractionLevelCounter.getAndIncrement());
         });
     }
 
     private void contractVertex(ContractionVertex<V> vertex, int contractionLevel) {
-
         @SuppressWarnings("unchecked")
         List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts
                 = (List<Pair<ContractionEdge<E>, ContractionEdge<E>>>) shortcutsArray[vertex.vertexId];
-        shortcutsArray[vertex.vertexId] = null;
-        VertexData data = dataArray[vertex.vertexId];
 
         // add shortcuts
         for (Pair<ContractionEdge<E>, ContractionEdge<E>> shortcut : shortcuts) {
@@ -341,15 +335,15 @@ public class ContractionHierarchyAlgorithm<V, E> {
             ContractionVertex<V> shortcutTarget = maskedContractionGraph.getEdgeTarget(shortcut.getSecond());
             ContractionEdge<E> shortcutEdge = new ContractionEdge<>(shortcut);
 
-            boolean added = contractionGraph.addEdge(shortcutSource, shortcutTarget, shortcutEdge);
-
-            double weight = maskedContractionGraph.getEdgeWeight(shortcut.getFirst())
+            double shortcutsWeight = maskedContractionGraph.getEdgeWeight(shortcut.getFirst())
                     + maskedContractionGraph.getEdgeWeight(shortcut.getSecond());
 
+            boolean added = contractionGraph.addEdge(shortcutSource, shortcutTarget, shortcutEdge);
+
             if (added) {
-                contractionGraph.setEdgeWeight(shortcutEdge, weight);
+                contractionGraph.setEdgeWeight(shortcutEdge, shortcutsWeight);
             } else {
-                contractionGraph.setEdgeWeight(contractionGraph.getEdge(shortcutSource, shortcutTarget), weight);
+                contractionGraph.setEdgeWeight(contractionGraph.getEdge(shortcutSource, shortcutTarget), shortcutsWeight);
             }
         }
 
@@ -359,10 +353,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
 
     private void updateNeighboursPriorities(ContractionVertex<V> vertex) {
-        Set<ContractionVertex<V>> neighbours = Graphs.neighborSetOf(maskedContractionGraph, vertex);
-        VertexData vertexData = dataArray[vertex.vertexId];
-        for (ContractionVertex<V> neighbour : neighbours) {
-            VertexData neighbourData = dataArray[neighbour.vertexId];
+        VertexData vertexData = verticesDataArray[vertex.vertexId];
+        for (ContractionVertex<V> neighbour : Graphs.neighborSetOf(maskedContractionGraph, vertex)) {
+            VertexData neighbourData = verticesDataArray[neighbour.vertexId];
             neighbourData.depth = Math.max(neighbourData.depth, vertexData.depth + 1);
             updatePriority(neighbour, neighbourData);
         }
@@ -377,14 +370,13 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
     private void updatePriority(ContractionVertex<V> vertex, VertexData data) {
         VertexStatistics statistics = getStatistics(vertex);
-        if (statistics.removedContractionEdges * statistics.removeOriginalEdges == 0) {
+        if (statistics.removedContractionEdges * statistics.removedOriginalEdges == 0) {
             data.priority = data.depth;
         } else {
             data.priority = 4.0 * statistics.addedContractionEdges / statistics.removedContractionEdges +
-                    2.0 * statistics.addedOriginalEdges / statistics.removeOriginalEdges +
+                    2.0 * statistics.addedOriginalEdges / statistics.removedOriginalEdges +
                     1.0 * data.depth;
         }
-
     }
 
     private VertexStatistics getStatistics(ContractionVertex<V> vertex) {
@@ -395,9 +387,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
     private void addRemovedEdgesStatistics(ContractionVertex<V> vertex, VertexStatistics statistics) {
-        maskedContractionGraph.edgesOf(vertex).forEach(e -> {
+        maskedContractionGraph.edgesOf(vertex).forEach(edge -> {
             ++statistics.removedContractionEdges;
-            statistics.removeOriginalEdges += e.originalEdges;
+            statistics.removedOriginalEdges += edge.originalEdges;
         });
     }
 
@@ -417,10 +409,9 @@ public class ContractionHierarchyAlgorithm<V, E> {
         for (ContractionEdge<E> outEdge : maskedContractionGraph.outgoingEdgesOf(vertex)) {
             ContractionVertex<V> successor = maskedContractionGraph.getEdgeTarget(outEdge);
 
-            if (dataArray[successor.vertexId] != null) {
-                if (dataArray[successor.vertexId].isIndependent) {
-                    continue;
-                }
+            if (verticesDataArray[successor.vertexId] != null
+                    && verticesDataArray[successor.vertexId].isIndependent) {
+                continue;
             }
 
             successors.add(successor);
@@ -430,12 +421,12 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
         for (ContractionEdge<E> inEdge : maskedContractionGraph.incomingEdgesOf(vertex)) {
             ContractionVertex<V> predecessor = contractionGraph.getEdgeSource(inEdge);
-            if (dataArray[predecessor.vertexId] != null &&
-                    dataArray[predecessor.vertexId].isIndependent) {
+            if (verticesDataArray[predecessor.vertexId] != null
+                    && verticesDataArray[predecessor.vertexId].isIndependent) {
                 continue;
             }
 
-            boolean containedPredecessor = successors.remove(predecessor); // might contain the predecessor vertex itself
+            boolean containedPredecessor = successors.remove(predecessor); // might contain the predecessor vertex
 
             Map<ContractionVertex<V>, AddressableHeap.Handle<Double, ContractionVertex<V>>> distances =
                     iterateToSuccessors(maskedContractionGraph,
@@ -466,7 +457,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
     private void markContracted(int independentSetStart, int independentSetEnd) {
         for (int i = independentSetStart; i < independentSetEnd; ++i) {
-            dataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted = true;
+            verticesDataArray[((ContractionVertex<V>) verticesArray[i]).vertexId].isContracted = true;
         }
     }
 
@@ -474,14 +465,15 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private Map<ContractionVertex<V>, AddressableHeap.Handle<Double, ContractionVertex<V>>>
     iterateToSuccessors(Graph<ContractionVertex<V>, ContractionEdge<E>> graph,
                         ContractionVertex<V> source,
-                        Set<ContractionVertex<V>> targets,
-                        ContractionVertex<V> forbiddenVertex,
+                        Set<ContractionVertex<V>> successors,
+                        ContractionVertex<V> vertexToIgnore,
                         double radius) {
         AddressableHeap<Double, ContractionVertex<V>> heap = shortcutsSearchHeapSupplier.get();
         Map<ContractionVertex<V>, AddressableHeap.Handle<Double, ContractionVertex<V>>> distanceMap = new HashMap<>();
+
         updateDistance(source, 0.0, heap, distanceMap);
 
-        int numOfSuccessors = targets.size();
+        int numOfSuccessors = successors.size();
         int passedSuccessors = 0;
 
         while (!heap.isEmpty()) {
@@ -493,37 +485,37 @@ public class ContractionHierarchyAlgorithm<V, E> {
                 break;
             }
 
-            if (targets.contains(vertex)) {
+            if (successors.contains(vertex)) {
                 ++passedSuccessors;
                 if (passedSuccessors == numOfSuccessors) {
                     break;
                 }
             }
 
-            relaxNode(graph, heap, distanceMap, vertex, distance, forbiddenVertex);
+            relaxNode(graph, heap, distanceMap, vertex, distance, vertexToIgnore);
         }
         return distanceMap;
     }
 
     private void relaxNode(Graph<ContractionVertex<V>, ContractionEdge<E>> graph,
                            AddressableHeap<Double, ContractionVertex<V>> heap,
-                           Map<ContractionVertex<V>, AddressableHeap.Handle<Double, ContractionVertex<V>>> map,
+                           Map<ContractionVertex<V>, AddressableHeap.Handle<Double, ContractionVertex<V>>> distanceMap,
                            ContractionVertex<V> vertex,
                            double vertexDistance,
-                           ContractionVertex<V> forbiddenVertex) {
+                           ContractionVertex<V> vertexToIgnore) {
 
         for (ContractionEdge<E> edge : graph.outgoingEdgesOf(vertex)) {
             ContractionVertex<V> successor = graph.getEdgeTarget(edge);
 
-            if (successor.equals(forbiddenVertex) ||
-                    (dataArray[successor.vertexId] != null && dataArray[successor.vertexId].isIndependent)) {
+            if (successor.equals(vertexToIgnore) ||
+                    (verticesDataArray[successor.vertexId] != null && verticesDataArray[successor.vertexId].isIndependent)) {
                 // skip independent vertices because they will be contracted
                 continue;
             }
 
             double updatedDistance = vertexDistance + graph.getEdgeWeight(edge);
 
-            updateDistance(successor, updatedDistance, heap, map);
+            updateDistance(successor, updatedDistance, heap, distanceMap);
         }
     }
 
@@ -538,9 +530,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
             node.decreaseKey(distance);
         }
     }
-
-
-
 
 
     private void submitTasks(int segmentStart, int segmentEnd, Consumer<ContractionVertex<V>> consumer) {
@@ -606,15 +595,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         public int hashCode() {
             return Objects.hash(vertex);
         }
-
-        @Override
-        public String toString() {
-            return "ContractionVertex{" +
-                    "vertexId=" + vertexId +
-                    ", vertex=" + vertex +
-                    ", contractionLevel=" + contractionLevel +
-                    '}';
-        }
     }
 
     public static class ContractionEdge<E1> {
@@ -631,16 +611,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         ContractionEdge(Pair<ContractionEdge<E1>, ContractionEdge<E1>> skippedEdges) {
             this.skippedEdges = skippedEdges;
             this.originalEdges = skippedEdges.getFirst().originalEdges + skippedEdges.getSecond().originalEdges;
-        }
-
-        @Override
-        public String toString() {
-            return "ContractionEdge{" +
-                    "edge=" + edge +
-                    ", skippedEdges=" + skippedEdges +
-                    ", isUpward=" + isUpward +
-                    ", originalEdges=" + originalEdges +
-                    '}';
         }
     }
 
@@ -688,13 +658,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
             int start = workerSegmentStart(segmentStart, segmentsEnd, workerId);
             int end = workerSegmentEnd(segmentStart, segmentsEnd, workerId);
             for (int i = start; i < end; ++i) {
-                try {
-                    consumer.accept((ContractionVertex<V>) verticesArray[i]);
-                } catch (NullPointerException e) {
-                    System.out.println(verticesArray);
-                    System.out.println(verticesArray[i]);
-                    throw e;
-                }
+                consumer.accept((ContractionVertex<V>) verticesArray[i]);
             }
         }
 
@@ -710,10 +674,10 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
     private static class VertexData {
         int depth;
+        int random;
         double priority;
         boolean isContracted;
         boolean isIndependent;
-        int random;
 
         VertexData(int random) {
             this.random = random;
@@ -724,6 +688,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         int addedContractionEdges;
         int removedContractionEdges;
         int addedOriginalEdges;
-        int removeOriginalEdges;
+        int removedOriginalEdges;
     }
 }
