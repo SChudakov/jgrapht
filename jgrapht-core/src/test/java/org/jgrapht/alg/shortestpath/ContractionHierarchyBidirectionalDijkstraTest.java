@@ -233,7 +233,7 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
     public void testRoadNetwork() {
         String path = "/home/semen/drive/osm/final/andorra.txt";
 
-        Graph<Node, DefaultWeightedEdge> graph = new SimpleWeightedGraph<>(DefaultWeightedEdge.class);
+        Graph<Node, DefaultWeightedEdge> graph = new SimpleDirectedWeightedGraph<>(DefaultWeightedEdge.class);
         OSMReader reader = new OSMReader();
         reader.readGraph(graph, path, ShortestPathPerformance::greatCircleDistance);
         System.out.println("graph read");

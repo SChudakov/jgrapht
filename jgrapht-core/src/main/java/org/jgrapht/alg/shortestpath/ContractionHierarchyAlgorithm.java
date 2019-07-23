@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
@@ -43,7 +42,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -92,10 +91,13 @@ public class ContractionHierarchyAlgorithm<V, E> {
     private ExecutorCompletionService<Void> completionService;
     private int parallelism;
 
-    private List<IndependentSet> independentSetWorkers;
-    private List<Shortcuts> shortcutsWorkers;
-    private List<Neighbours> neighboursWorkers;
+    private List<ContractionTask> tasks;
 
+    private Consumer<ContractionVertex<V>> computeInitialPrioritiesConsumer;
+    private Consumer<ContractionVertex<V>> computeIndependentSetConsumer;
+    private Consumer<ContractionVertex<V>> computeShortcutsConsumer;
+    private Consumer<ContractionVertex<V>> updateNeighboursConsumer;
+    private Consumer<ContractionVertex<V>> markUpwardEdgesConsumer;
 
 
     public ContractionHierarchyAlgorithm(Graph<V, E> graph) {
@@ -134,28 +136,28 @@ public class ContractionHierarchyAlgorithm<V, E> {
         executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         completionService = new ExecutorCompletionService<>(executor);
 
-
-        independentSetWorkers = new ArrayList<>(parallelism);
-        shortcutsWorkers = new ArrayList<>(parallelism);
-        neighboursWorkers = new ArrayList<>(parallelism);
-        Set<Integer> ids = new ConcurrentSkipListSet<>();
-        Set<Integer> levels = new ConcurrentSkipListSet<>();
+        tasks = new ArrayList<>(parallelism);
         for (int i = 0; i < parallelism; ++i) {
-            independentSetWorkers.add(new IndependentSet(i));
-            shortcutsWorkers.add(new Shortcuts(i));
-            neighboursWorkers.add(new Neighbours(i));
+            tasks.add(new ContractionTask(i));
         }
+
+        computeInitialPrioritiesConsumer = vertex -> dataArray[vertex.vertexId] = getPriority(vertex);
+        computeIndependentSetConsumer = vertex -> dataArray[vertex.vertexId].isIndependent = vertexIsIndependent(vertex);
+        computeShortcutsConsumer = vertex -> shortcutsArray[vertex.vertexId] = getShortcuts(vertex);
+        updateNeighboursConsumer = vertex -> updateNeighboursPriorities(vertex);
+        markUpwardEdgesConsumer = vertex -> contractionGraph.outgoingEdgesOf(vertex).forEach(
+                e -> e.isUpward = contractionGraph.getEdgeSource(e).contractionLevel <
+                        contractionGraph.getEdgeTarget(e).contractionLevel);
     }
 
 
-    public Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>,
-            Map<V, ContractionVertex<V>>> computeContractionHierarchy() {
+    public Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>, Map<V, ContractionVertex<V>>> computeContractionHierarchy() {
         fillContractionGraphAndVerticesArray();
-        computeInitialPriorities();
+        submitTasks(0, contractionGraph.vertexSet().size(), computeInitialPrioritiesConsumer);
 
         contractVertices();
 
-        markUpwardEdges();
+        submitTasks(0, contractionGraph.vertexSet().size(), markUpwardEdgesConsumer);
         shutdownExecutor();
 
         return Pair.of(contractionGraph, contractionMapping);
@@ -217,13 +219,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         }
     }
 
-    private void computeInitialPriorities() {
-        for (int i = 0; i < parallelism; ++i) {
-            completionService.submit(new InitialPriorities(i), null);
-        }
-        takeTasks(parallelism);
-    }
-
 
     private void contractVertices() {
         int independentSetStart;
@@ -232,15 +227,15 @@ public class ContractionHierarchyAlgorithm<V, E> {
 
         int cnt = 0;
         while (independentSetEnd != 0) {
-            computeIndependentSet(independentSetEnd);
+            submitTasks(0, independentSetEnd, computeIndependentSetConsumer);
 
             independentSetStart = partitionIndependentSet(independentSetEnd);
 
-//            System.out.println(cnt++ + " " + independentSetStart + " " + independentSetEnd + " " + (independentSetEnd - independentSetStart));
+//            System.out.println(cnt++ + " " + segmentStart + " " + segmentsEnd + " " + (segmentsEnd - segmentStart));
 
-            computeShortcuts(independentSetStart, independentSetEnd);
+            submitTasks(independentSetStart, independentSetEnd, computeShortcutsConsumer);
             contractIndependentSet(independentSetStart, independentSetEnd);
-            updateNeighbours(independentSetStart, independentSetEnd);
+            submitTasks(independentSetStart, independentSetEnd, updateNeighboursConsumer);
             markContracted(independentSetStart, independentSetEnd);
 
             independentSetEnd = independentSetStart;
@@ -254,14 +249,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         }
     }
 
-
-    private void computeIndependentSet(int notContractedVerticesEnd) {
-        for (IndependentSet worker : independentSetWorkers) {
-            worker.notContractedVerticesEnd = notContractedVerticesEnd;
-            completionService.submit(worker, null);
-        }
-        takeTasks(parallelism);
-    }
 
     private boolean vertexIsIndependent(ContractionVertex<V> vertex) {
         double vertexPriority = dataArray[vertex.vertexId].priority;
@@ -296,6 +283,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
         return vertexId1 > vertexId2;
     }
 
+
     private int partitionIndependentSet(int notContractedVerticesEnd) {
         int left = 0;
         int right = notContractedVerticesEnd - 1;
@@ -328,16 +316,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         Object tmp = array[i];
         array[i] = array[j];
         array[j] = tmp;
-    }
-
-
-    private void computeShortcuts(int independentSetStart, int independentSetEnd) {
-        for (Shortcuts worker : shortcutsWorkers) {
-            worker.independentSetStart = independentSetStart;
-            worker.independentSetEnd = independentSetEnd;
-            completionService.submit(worker, null);
-        }
-        takeTasks(parallelism);
     }
 
 
@@ -379,15 +357,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         vertex.contractionLevel = contractionLevel;
     }
 
-
-    private void updateNeighbours(int independentSetStart, int independentSetEnd) {
-        for (Neighbours worker : neighboursWorkers) {
-            worker.independentSetStart = independentSetStart;
-            worker.independentSetEnd = independentSetEnd;
-            completionService.submit(worker, null);
-        }
-        takeTasks(parallelism);
-    }
 
     private void updateNeighboursPriorities(ContractionVertex<V> vertex) {
         Set<ContractionVertex<V>> neighbours = Graphs.neighborSetOf(maskedContractionGraph, vertex);
@@ -564,11 +533,14 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
 
-    private void markUpwardEdges() {
-        for (int i = 0; i < parallelism; ++i) {
-            completionService.submit(new UpwardEdgesMarker(i), null);
+    private void submitTasks(int segmentStart, int segmentEnd, Consumer<ContractionVertex<V>> consumer) {
+        for (ContractionTask task : tasks) {
+            task.consumer = consumer;
+            task.segmentStart = segmentStart;
+            task.segmentsEnd = segmentEnd;
+            completionService.submit(task, null);
         }
-        takeTasks(parallelism);
+        takeTasks(tasks.size());
     }
 
     private void takeTasks(int numOfTasks) {
@@ -588,14 +560,6 @@ public class ContractionHierarchyAlgorithm<V, E> {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-    }
-
-    private int workerSegmentStart(int start, int end, int workerId) {
-        return start + ((end - start) * workerId) / parallelism;
-    }
-
-    private int workerSegmentEnd(int start, int end, int workerId) {
-        return start + ((end - start) * (workerId + 1)) / parallelism;
     }
 
 
@@ -688,111 +652,37 @@ public class ContractionHierarchyAlgorithm<V, E> {
     }
 
 
-    private class InitialPriorities implements Runnable {
-        private int workerId;
-
-        InitialPriorities(int workerId) {
-            this.workerId = workerId;
-        }
-
-        @Override
-        public void run() {
-            int numOfVertices = graph.vertexSet().size();
-            int start = workerSegmentStart(0, numOfVertices, workerId);
-            int end = workerSegmentEnd(0, numOfVertices, workerId);
-
-            for (int vertexIndex = start; vertexIndex < end; ++vertexIndex) {
-                @SuppressWarnings("unchecked")
-                ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
-                dataArray[vertex.vertexId] = getPriority(vertex);
-            }
-        }
-    }
-
-    private class IndependentSet implements Runnable {
+    private class ContractionTask implements Runnable {
         int workerId;
-        int notContractedVerticesEnd;
+        int segmentStart;
+        int segmentsEnd;
+        Consumer<ContractionVertex<V>> consumer;
 
-        IndependentSet(int workerId) {
+        public ContractionTask(int workerId) {
             this.workerId = workerId;
         }
 
         @Override
         public void run() {
-            int start = workerSegmentStart(0, notContractedVerticesEnd, workerId);
-            int end = workerSegmentEnd(0, notContractedVerticesEnd, workerId);
-            for (int vertexIndex = start; vertexIndex < end; ++vertexIndex) {
-                @SuppressWarnings("unchecked")
-                ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
-                dataArray[vertex.vertexId].isIndependent = vertexIsIndependent(vertex);
+            int start = workerSegmentStart(segmentStart, segmentsEnd, workerId);
+            int end = workerSegmentEnd(segmentStart, segmentsEnd, workerId);
+            for (int i = start; i < end; ++i) {
+                try {
+                    consumer.accept((ContractionVertex<V>) verticesArray[i]);
+                } catch (NullPointerException e) {
+                    System.out.println(verticesArray);
+                    System.out.println(verticesArray[i]);
+                    throw e;
+                }
             }
         }
-    }
 
-    private class Shortcuts implements Runnable {
-        int workerId;
-        int independentSetStart;
-        int independentSetEnd;
-
-        public Shortcuts(int workerId) {
-            this.workerId = workerId;
+        private int workerSegmentStart(int start, int end, int workerId) {
+            return start + ((end - start) * workerId) / parallelism;
         }
 
-        @Override
-        public void run() {
-            int start = workerSegmentStart(independentSetStart, independentSetEnd, workerId);
-            int end = workerSegmentEnd(independentSetStart, independentSetEnd, workerId);
-            for (int vertexIndex = start; vertexIndex < end; ++vertexIndex) {
-                @SuppressWarnings("unchecked")
-                ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
-                List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts = getShortcuts(vertex);
-                shortcutsArray[vertex.vertexId] = shortcuts;
-            }
-        }
-    }
-
-
-    private class Neighbours implements Runnable {
-        int workerId;
-        int independentSetStart;
-        int independentSetEnd;
-
-        public Neighbours(int workerId) {
-            this.workerId = workerId;
-        }
-
-        @Override
-        public void run() {
-            int start = workerSegmentStart(independentSetStart, independentSetEnd, workerId);
-            int end = workerSegmentEnd(independentSetStart, independentSetEnd, workerId);
-            for (int vertexIndex = start; vertexIndex < end; ++vertexIndex) {
-                @SuppressWarnings("unchecked")
-                ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
-                updateNeighboursPriorities(vertex);
-            }
-        }
-    }
-
-    private class UpwardEdgesMarker implements Runnable {
-        private int workerId;
-
-        UpwardEdgesMarker(int workerId) {
-            this.workerId = workerId;
-        }
-
-        @Override
-        public void run() {
-            int numOfVertices = graph.vertexSet().size();
-            int start = workerSegmentStart(0, numOfVertices, workerId);
-            int end = workerSegmentEnd(0, numOfVertices, workerId);
-            for (int vertexIndex = start; vertexIndex < end; ++vertexIndex) {
-                @SuppressWarnings("unchecked")
-                ContractionVertex<V> vertex = (ContractionVertex<V>) verticesArray[vertexIndex];
-                contractionGraph.outgoingEdgesOf(vertex).forEach(
-                        e -> e.isUpward = contractionGraph.getEdgeSource(e).contractionLevel <
-                                contractionGraph.getEdgeTarget(e).contractionLevel
-                );
-            }
+        private int workerSegmentEnd(int start, int end, int workerId) {
+            return start + ((end - start) * (workerId + 1)) / parallelism;
         }
     }
 
