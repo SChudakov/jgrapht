@@ -119,7 +119,7 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
         assertEquals(Arrays.asList(8, 5, 2), dijkstra.getPath(8, 2).getVertexList());
     }
 
-//    @Test
+    @Test
     public void testOnRandomGraphs() {
         int numOfVertices = 100;
         int vertexDegree = 5;
@@ -183,8 +183,7 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
         assertEqualPaths(dijkstraShortestPaths, contractionDijkstra, graph.vertexSet());
     }
 
-    private Graph<Integer, DefaultWeightedEdge> generateRandomGraph(
-            int numOfVertices, int numOfEdges) {
+    private Graph<Integer, DefaultWeightedEdge> generateRandomGraph(int numOfVertices, int numOfEdges) {
         DirectedWeightedPseudograph<Integer, DefaultWeightedEdge> graph =
                 new DirectedWeightedPseudograph<>(DefaultWeightedEdge.class);
         graph.setVertexSupplier(SupplierUtil.createIntegerSupplier());
@@ -232,7 +231,7 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
 
     @Test
     public void testRoadNetwork() {
-        String path = "/home/semen/drive/osm/final/andorra.txt";
+        String path = "/home/semen/drive/osm/final/montenegro.txt";
 
         Graph<Node, DefaultWeightedEdge> graph = new SimpleWeightedGraph<>(DefaultWeightedEdge.class);
         OSMReader reader = new OSMReader();
