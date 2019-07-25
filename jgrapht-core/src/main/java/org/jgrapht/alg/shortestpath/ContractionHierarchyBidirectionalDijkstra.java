@@ -46,23 +46,22 @@ import static org.jgrapht.alg.shortestpath.ContractionHierarchyAlgorithm.Contrac
  * Springer-Verlag, Berlin, Heidelberg, 319-333.
  *
  * <p>
- * During contraction vertices of the graph are ordered by their "importance". The algorithm uses this order
- * to divide original graph into to parts which are called upward and downward graphs. Both parts have all
- * vertices of the original graph. The upward graph ($G_{\\uparrow}$) contains only thise edges which source
+ * During contraction graph is divided into 2 parts which are called upward and downward graphs. Both parts have all
+ * vertices of the original graph. The upward graph ($G_{\\uparrow}$) contains only those edges which source
  * has lower order than the target and vice versa for the downward graph ($G_{\downarrow}$).
  *
  * <p>
  * For the shortest path query from $s$ to $t$, a modified bidirectional Dijkstra shortest path search is
  * performed. The forward search from $s$ operates on $G_{\\uparrow}$ and the backward search from $t$ -
  * on the $G_{\downarrow}$. In each direction only the edges of the corresponding part of the graph are
- * considered. Both searches eventually meet at the vertex v, which has the highest order in the
- * shortest path from $s$ to $t$. Whenever a node is settled in one direction that is already settled in the
- * other direction, a new candidate for a shortest path is found. Search is aborted in one direction if the
- * smallest element in the queue is at least as large as the best candidate path found so far.
+ * considered. Both searches eventually meet at the vertex $v$, which has the highest order in the shortest
+ * path from $s$ to $t$. Whenever a node is settled in one direction that is already settled in the other
+ * direction, a new candidate for a shortest path is found. Search is aborted in one direction if the smallest
+ * element in the queue is at least as large as the best candidate path found so far.
  *
  * <p>
- * After computing contracted path algorithm unpacks it recursively into resulting path using information
- * stored in edges of the contracted graph.
+ * After computing contracted path algorithm unpacks it recursively into resulting path using bypassed edge
+ * stored in the contraction hierarchy graph.
  *
  * <p>
  * There is a possibility to provide an already computed contraction for the graph. For now there is no mean
@@ -72,7 +71,6 @@ import static org.jgrapht.alg.shortestpath.ContractionHierarchyAlgorithm.Contrac
  * @param <V> the graph vertex type
  * @param <E> the graph edge type
  * @author Semen Chudakov
- * @see BidirectionalDijkstraShortestPath
  * @see ContractionHierarchyAlgorithm
  * @since July 2019
  */
@@ -83,10 +81,13 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BaseShortes
      */
     private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
     /**
-     * Mapping from original vertices to theirs pairs in the {@code contractionGraph}.
+     * Mapping from original to contracted vertices.
      */
     private Map<V, ContractionVertex<V>> contractionMapping;
 
+    /**
+     * Supplier for preferable heap implementation.
+     */
     private Supplier<AddressableHeap<Double, Pair<ContractionVertex<V>,
             ContractionEdge<E>>>> heapSupplier;
 
@@ -144,11 +145,10 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BaseShortes
     }
 
     /**
-     * Initializes fields in a new instance of the algorithm.
+     * Initializes fields of a new instance of the algorithm.
      *
      * @param contractedGraph    contracted graph
-     * @param contractionMapping mapping from vertices in
-     *                           graph to vertices in {@code contractionGraph}
+     * @param contractionMapping mapping from original to contracted vertices
      * @param radius             search radius
      * @param heapSupplier       supplier of the preferable heap implementation
      */
@@ -162,6 +162,9 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BaseShortes
         this.heapSupplier = heapSupplier;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public GraphPath<V, E> getPath(V source, V sink) {
         if (!graph.containsVertex(source)) {
@@ -226,7 +229,7 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BaseShortes
                 double vDistance = node.getKey();
 
                 for (ContractionEdge<E> e : frontier.graph.outgoingEdgesOf(v)) {
-                    if (frontier.isDownwardDirection.apply(e)) { // skip downward edges
+                    if (frontier.isDownwardEdge.apply(e)) { // skip downward edges
                         continue;
                     }
 
@@ -320,36 +323,36 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BaseShortes
     }
 
     /**
-     * Unpacks {@code edge} recursively going from target to source.
+     * Unpacks {@code edge} by recursively going from target to source.
      *
      * @param edge       edge to unpack
      * @param vertexList vertex list of the path
      * @param edgeList   edge list of the path
      */
     private void unpackBackward(ContractionEdge<E> edge, LinkedList<V> vertexList, LinkedList<E> edgeList) {
-        if (edge.skippedEdges == null) {
+        if (edge.bypassedEdges == null) {
             vertexList.addFirst(contractionGraph.getEdgeSource(edge).vertex);
             edgeList.addFirst(edge.edge);
         } else {
-            unpackBackward(edge.skippedEdges.getSecond(), vertexList, edgeList);
-            unpackBackward(edge.skippedEdges.getFirst(), vertexList, edgeList);
+            unpackBackward(edge.bypassedEdges.getSecond(), vertexList, edgeList);
+            unpackBackward(edge.bypassedEdges.getFirst(), vertexList, edgeList);
         }
     }
 
     /**
-     * Unpacks {@code edge} recursively going from source to target.
+     * Unpacks {@code edge} by recursively going from source to target.
      *
      * @param edge       edge to unpack
      * @param vertexList vertex list of the path
      * @param edgeList   edge list of the path
      */
     private void unpackForward(ContractionEdge<E> edge, LinkedList<V> vertexList, LinkedList<E> edgeList) {
-        if (edge.skippedEdges == null) {
+        if (edge.bypassedEdges == null) {
             vertexList.addLast(contractionGraph.getEdgeTarget(edge).vertex);
             edgeList.addLast(edge.edge);
         } else {
-            unpackForward(edge.skippedEdges.getFirst(), vertexList, edgeList);
-            unpackForward(edge.skippedEdges.getSecond(), vertexList, edgeList);
+            unpackForward(edge.bypassedEdges.getFirst(), vertexList, edgeList);
+            unpackForward(edge.bypassedEdges.getSecond(), vertexList, edgeList);
         }
     }
 
@@ -364,22 +367,22 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BaseShortes
         /**
          * Skipping condition for graph edges during the search.
          */
-        final Function<E1, Boolean> isDownwardDirection;
+        final Function<E1, Boolean> isDownwardEdge;
         boolean isFinished;
 
         /**
          * Constructs an instance of a search frontier for the given graph, heap supplier and
-         * isDownwardDirection function.
+         * {@code isDownwardEdge} function.
          *
-         * @param graph               the graph
-         * @param heapSupplier        supplier for the preferable heap implementation
-         * @param isDownwardDirection skipping condition for edges
+         * @param graph          the graph
+         * @param heapSupplier   supplier for the preferable heap implementation
+         * @param isDownwardEdge skipping condition for edges
          */
         ContractionSearchFrontier(Graph<V1, E1> graph,
                                   Supplier<AddressableHeap<Double, Pair<V1, E1>>> heapSupplier,
-                                  Function<E1, Boolean> isDownwardDirection) {
+                                  Function<E1, Boolean> isDownwardEdge) {
             super(graph, heapSupplier);
-            this.isDownwardDirection = isDownwardDirection;
+            this.isDownwardEdge = isDownwardEdge;
         }
     }
 }

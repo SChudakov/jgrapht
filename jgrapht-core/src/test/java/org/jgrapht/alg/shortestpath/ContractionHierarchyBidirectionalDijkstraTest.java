@@ -26,26 +26,27 @@ import org.jgrapht.generate.GnmRandomGraphGenerator;
 import org.jgrapht.generate.GraphGenerator;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.DirectedWeightedPseudograph;
-import org.jgrapht.graph.SimpleDirectedWeightedGraph;
 import org.jgrapht.graph.SimpleWeightedGraph;
 import org.jgrapht.util.SupplierUtil;
 import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
-import static org.jgrapht.alg.shortestpath.ContractionHierarchyAlgorithm.ContractionEdge;
 import static org.jgrapht.alg.shortestpath.ContractionHierarchyAlgorithm.ContractionVertex;
-import static org.jgrapht.alg.shortestpath.ShortestPathPerformance.Node;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+/**
+ * Tests for the {@link ContractionHierarchyBidirectionalDijkstra}.
+ */
 public class ContractionHierarchyBidirectionalDijkstraTest {
+    /**
+     * Seed for random numbers generator used in tests.
+     */
     private static final long SEED = 19L;
 
     @Test
@@ -120,6 +121,25 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
     }
 
     @Test
+    public void testRingGraph() {
+        int size = 100;
+        Graph<Integer, DefaultWeightedEdge> graph = new SimpleWeightedGraph<>(DefaultWeightedEdge.class);
+        fillRingGraph(graph, size);
+        test(graph, 0);
+    }
+
+    private void fillRingGraph(Graph<Integer, DefaultWeightedEdge> graph, int size) {
+        Random random = new Random(SEED);
+        for (int i = 0; i < size; ++i) {
+            graph.addVertex(i);
+        }
+        for (int i = 0; i < size; ++i) {
+            graph.addEdge(i, (i + 1) % size);
+            graph.setEdgeWeight(graph.getEdge(i, (i + 1) % size), random.nextDouble());
+        }
+    }
+
+    @Test
     public void testOnRandomGraphs() {
         int numOfVertices = 100;
         int vertexDegree = 5;
@@ -149,26 +169,13 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
         }
     }
 
-
-    @Test
-    public void testRingGraph() {
-        int size = 100;
-        Graph<Integer, DefaultWeightedEdge> graph = new SimpleWeightedGraph<>(DefaultWeightedEdge.class);
-        fillLineGraph(graph, size);
-        test(graph, 0);
-    }
-
-    private void fillLineGraph(Graph<Integer, DefaultWeightedEdge> graph, int size) {
-        Random random = new Random(SEED);
-        for (int i = 0; i < size; ++i) {
-            graph.addVertex(i);
-        }
-        for (int i = 0; i < size; ++i) {
-            graph.addEdge(i, (i + 1) % size);
-            graph.setEdgeWeight(graph.getEdge(i, (i + 1) % size), random.nextDouble());
-        }
-    }
-
+    /**
+     * Test correctness of {@link ContractionHierarchyBidirectionalDijkstra} on
+     * {@code graph} starting at {@code source}.
+     *
+     * @param graph  graph
+     * @param source vertex in {@code graph}
+     */
     private void test(Graph<Integer, DefaultWeightedEdge> graph, Integer source) {
         ShortestPathAlgorithm.SingleSourcePaths<Integer, DefaultWeightedEdge> dijkstraShortestPaths =
                 new DijkstraShortestPath<>(graph).getPaths(source);
@@ -183,6 +190,14 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
         assertEqualPaths(dijkstraShortestPaths, contractionDijkstra, graph.vertexSet());
     }
 
+    /**
+     * Generates an instance or random graph with {@code numOfVertices} vertices
+     * and {@code numOfEdges} edges.
+     *
+     * @param numOfVertices number of vertices
+     * @param numOfEdges    number of edges
+     * @return generated graph
+     */
     private Graph<Integer, DefaultWeightedEdge> generateRandomGraph(int numOfVertices, int numOfEdges) {
         DirectedWeightedPseudograph<Integer, DefaultWeightedEdge> graph =
                 new DirectedWeightedPseudograph<>(DefaultWeightedEdge.class);
@@ -199,6 +214,11 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
         return graph;
     }
 
+    /**
+     * Connects {@code graph} connected.
+     *
+     * @param graph graph
+     */
     private void makeConnected(Graph<Integer, DefaultWeightedEdge> graph) {
         Object[] vertices = graph.vertexSet().toArray();
         for (int i = 0; i < vertices.length - 1; ++i) {
@@ -207,12 +227,25 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
         }
     }
 
+    /**
+     * Sets edge weights to edges in {@code graph}.
+     *
+     * @param graph  graph
+     * @param random random numbers generator
+     */
     private void addEdgeWeights(Graph<Integer, DefaultWeightedEdge> graph, Random random) {
         for (DefaultWeightedEdge edge : graph.edgeSet()) {
             graph.setEdgeWeight(edge, random.nextDouble());
         }
     }
 
+    /**
+     * Checks computed single source shortest paths tree for equality,
+     *
+     * @param expected  expected paths
+     * @param actual    actual paths
+     * @param vertexSet vertices
+     */
     private void assertEqualPaths(
             ShortestPathAlgorithm.SingleSourcePaths<Integer, DefaultWeightedEdge> expected,
             ShortestPathAlgorithm.SingleSourcePaths<Integer, DefaultWeightedEdge> actual,
@@ -227,86 +260,5 @@ public class ContractionHierarchyBidirectionalDijkstraTest {
                         expected.getPath(sink).getWeight(), actual.getPath(sink).getWeight(), 1e-9);
             }
         }
-    }
-
-    @Test
-    public void testRoadNetwork() {
-        String path = "/home/semen/drive/osm/final/andorra.txt";
-
-        Graph<Node, DefaultWeightedEdge> graph = new SimpleDirectedWeightedGraph<>(DefaultWeightedEdge.class);
-        OSMReader reader = new OSMReader();
-        reader.readGraph(graph, path, ShortestPathPerformance::greatCircleDistance);
-        System.out.println("graph read");
-
-
-        List<Pair<Node, Node>> queries = getQueries(graph);
-
-        ContractionHierarchyAlgorithm<Node, DefaultWeightedEdge> algorithm
-                = new ContractionHierarchyAlgorithm<>(graph, 12, () -> new Random(SEED));
-        Pair<Graph<ContractionVertex<Node>, ContractionEdge<DefaultWeightedEdge>>, Map<Node, ContractionVertex<Node>>> p
-                = algorithm.computeContractionHierarchy();
-        ShortestPathAlgorithm<Node, DefaultWeightedEdge> dijkstraShortestPaths =
-                new DijkstraShortestPath<>(graph);
-        ContractionHierarchyBidirectionalDijkstra<Node, DefaultWeightedEdge> contractionDijkstra =
-                new ContractionHierarchyBidirectionalDijkstra<>(graph, p.getFirst(), p.getSecond());
-
-        for (Pair<Node, Node> query : queries) {
-            System.out.println(query);
-            Node source = query.getFirst();
-            Node target = query.getSecond();
-
-            test(dijkstraShortestPaths, contractionDijkstra, source, target);
-        }
-    }
-
-    private void unpack(List<ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> edges,
-                        Graph<ContractionHierarchyAlgorithm.ContractionVertex<Node>,
-                                ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge>> graph) {
-        System.out.println("\n\nContraction indices\n\n");
-        for (ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge> e : edges) {
-            System.out.println(graph.getEdgeSource(e).contractionLevel > graph.getEdgeTarget(e).contractionLevel);
-        }
-        for (ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge> e : edges) {
-            unpack(e);
-        }
-    }
-
-    private void unpack(ContractionHierarchyAlgorithm.ContractionEdge<DefaultWeightedEdge> edge) {
-        if (edge.edge != null) {
-            System.out.print(edge.edge + ", ");
-        } else {
-            unpack(edge.skippedEdges.getFirst());
-            unpack(edge.skippedEdges.getSecond());
-        }
-    }
-
-
-    private void test(ShortestPathAlgorithm<Node, DefaultWeightedEdge> expected,
-                      ShortestPathAlgorithm<Node, DefaultWeightedEdge> actual,
-                      Node source, Node target) {
-        GraphPath<Node, DefaultWeightedEdge> expectedPath = expected.getPath(source, target);
-        GraphPath<Node, DefaultWeightedEdge> actualPath = actual.getPath(source, target);
-
-        if (actualPath == null) {
-            System.out.println("here");
-            assertNull(expectedPath);
-        } else {
-            assertEquals(expectedPath.getWeight(), actualPath.getWeight(), 1e-9);
-        }
-    }
-
-    private List<Pair<Node, Node>> getQueries(
-            Graph<Node, DefaultWeightedEdge> graph) {
-        int numOfQueries = 100;
-        Random random = new Random(SEED);
-
-        List<Pair<Node, Node>> queries = new ArrayList<>();
-        Node[] nodes = graph.vertexSet().toArray(new Node[0]);
-        for (int i = 0; i < numOfQueries; i++) {
-            int sourcePosition = random.nextInt(graph.vertexSet().size());
-            int targetPosition = random.nextInt(graph.vertexSet().size());
-            queries.add(Pair.of(nodes[sourcePosition], nodes[targetPosition]));
-        }
-        return queries;
     }
 }
