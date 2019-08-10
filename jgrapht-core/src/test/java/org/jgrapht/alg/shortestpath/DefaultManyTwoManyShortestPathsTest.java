@@ -72,14 +72,15 @@ public class DefaultManyTwoManyShortestPathsTest extends BaseManyTwoManyShortest
 
     @Test
     public void testOnRandomGraphs() {
-        int numOfVertices = 100;
-        int vertexDegree = 5;
+        int numOfVertices = 1000;
+        int vertexDegree = 20;
         int numOfIterations = 100;
-        int numOfRandomVertices = 10;
+        int numOfRandomVertices = 100;
 
         Random random = new Random(SEED);
 
         for (int i = 0; i < numOfIterations; i++) {
+            System.out.println(i);
             Graph<Integer, DefaultWeightedEdge> graph = generateRandomGraph(
                     numOfVertices, vertexDegree * numOfVertices, random);
 
