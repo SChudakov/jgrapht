@@ -302,7 +302,7 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BaseShortes
                 break;
             }
 
-            unpackBackward(e, vertexList, edgeList);
+            unpackBackward(contractionGraph, e, vertexList, edgeList);
             v = contractionGraph.getEdgeSource(e);
         }
 
@@ -315,7 +315,7 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BaseShortes
                 break;
             }
 
-            unpackForward(e, vertexList, edgeList);
+            unpackForward(contractionGraph, e, vertexList, edgeList);
             v = contractionGraph.getEdgeTarget(e);
         }
 
@@ -329,13 +329,14 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BaseShortes
      * @param vertexList vertex list of the path
      * @param edgeList   edge list of the path
      */
-    private void unpackBackward(ContractionEdge<E> edge, LinkedList<V> vertexList, LinkedList<E> edgeList) {
+    static <V, E> void unpackBackward(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                                      ContractionEdge<E> edge, LinkedList<V> vertexList, LinkedList<E> edgeList) {
         if (edge.bypassedEdges == null) {
             vertexList.addFirst(contractionGraph.getEdgeSource(edge).vertex);
             edgeList.addFirst(edge.edge);
         } else {
-            unpackBackward(edge.bypassedEdges.getSecond(), vertexList, edgeList);
-            unpackBackward(edge.bypassedEdges.getFirst(), vertexList, edgeList);
+            unpackBackward(contractionGraph, edge.bypassedEdges.getSecond(), vertexList, edgeList);
+            unpackBackward(contractionGraph, edge.bypassedEdges.getFirst(), vertexList, edgeList);
         }
     }
 
@@ -346,13 +347,14 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BaseShortes
      * @param vertexList vertex list of the path
      * @param edgeList   edge list of the path
      */
-    private void unpackForward(ContractionEdge<E> edge, LinkedList<V> vertexList, LinkedList<E> edgeList) {
+    static <V, E> void unpackForward(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                                     ContractionEdge<E> edge, LinkedList<V> vertexList, LinkedList<E> edgeList) {
         if (edge.bypassedEdges == null) {
             vertexList.addLast(contractionGraph.getEdgeTarget(edge).vertex);
             edgeList.addLast(edge.edge);
         } else {
-            unpackForward(edge.bypassedEdges.getFirst(), vertexList, edgeList);
-            unpackForward(edge.bypassedEdges.getSecond(), vertexList, edgeList);
+            unpackForward(contractionGraph, edge.bypassedEdges.getFirst(), vertexList, edgeList);
+            unpackForward(contractionGraph, edge.bypassedEdges.getSecond(), vertexList, edgeList);
         }
     }
 
