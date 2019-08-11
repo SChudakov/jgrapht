@@ -61,7 +61,6 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
             targets = sources;
             sources = tmp;
         }
-        System.out.println(reversed);
 
         Map<ContractionVertex<V>,
                 Map<ContractionVertex<V>, Pair<Double, ContractionEdge<E>>>> forwardSearchSpaces = new HashMap<>();
@@ -92,26 +91,20 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
         }
 
         if (reversed) {
-            return new CHManyToManyShortestPathsImpl(
-                    graph,
-                    contractionGraph,
-                    contractionMapping,
-                    backwardSearchSpaces,
-                    forwardSearchSpaces,
-                    middleVertices,
-                    reversed
-            );
-        } else {
-            return new CHManyToManyShortestPathsImpl(
-                    graph,
-                    contractionGraph,
-                    contractionMapping,
-                    forwardSearchSpaces,
-                    backwardSearchSpaces,
-                    middleVertices,
-                    reversed
-            );
+            Map<ContractionVertex<V>,
+                    Map<ContractionVertex<V>, Pair<Double, ContractionEdge<E>>>> tmp = forwardSearchSpaces;
+            forwardSearchSpaces = backwardSearchSpaces;
+            backwardSearchSpaces = tmp;
         }
+
+        return new CHManyToManyShortestPathsImpl(
+                graph,
+                contractionGraph,
+                contractionMapping,
+                forwardSearchSpaces,
+                backwardSearchSpaces,
+                middleVertices
+        );
     }
 
     private void backwardSearch(Graph<ContractionVertex<V>, ContractionEdge<E>> searchContractionGraph,
@@ -119,10 +112,10 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
                                 Map<ContractionVertex<V>, Map<ContractionVertex<V>,
                                         Pair<Double, ContractionEdge<E>>>> backwardSearchSpaces,
                                 Set<ContractionVertex<V>> contractedSources,
-                                boolean revered) {
+                                boolean reversed) {
         Graph<ContractionVertex<V>, ContractionEdge<E>> maskSubgraph;
 
-        if (revered) {
+        if (reversed) {
             maskSubgraph = new MaskSubgraph<>(
                     new EdgeReversedGraph<>(searchContractionGraph), v -> false, e -> !e.isUpward
             );
@@ -172,9 +165,9 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
                 double pathDistance = forwardDistance + bucket.distance;
                 Pair<ContractionVertex<V>, ContractionVertex<V>> pair;
                 if (reversed) {
-                    pair=Pair.of(bucket.target, source);
+                    pair = Pair.of(bucket.target, source);
                 } else {
-                    pair=Pair.of(source, bucket.target);
+                    pair = Pair.of(source, bucket.target);
                 }
                 middleVerticesMap.compute(pair, (p, distanceAndMiddleNode) -> {
                     if (distanceAndMiddleNode == null || distanceAndMiddleNode.getFirst() > pathDistance) {
@@ -220,8 +213,6 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
 
         private Map<Pair<ContractionVertex<V>, ContractionVertex<V>>, Pair<Double, ContractionVertex<V>>> middleVertices;
 
-        private boolean reversed;
-
         public CHManyToManyShortestPathsImpl(Graph<V, E> graph,
                                              Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
                                              Map<V, ContractionVertex<V>> contractionMapping,
@@ -230,15 +221,13 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
                                              Map<ContractionVertex<V>, Map<ContractionVertex<V>,
                                                      Pair<Double, ContractionEdge<E>>>> backwardSearchSpaces,
                                              Map<Pair<ContractionVertex<V>, ContractionVertex<V>>,
-                                                     Pair<Double, ContractionVertex<V>>> middleVertices,
-                                             boolean reversed) {
+                                                     Pair<Double, ContractionVertex<V>>> middleVertices) {
             this.graph = graph;
             this.contractionGraph = contractionGraph;
             this.contractionMapping = contractionMapping;
             this.forwardSearchSpaces = forwardSearchSpaces;
             this.backwardSearchSpaces = backwardSearchSpaces;
             this.middleVertices = middleVertices;
-            this.reversed = reversed;
         }
 
         @Override
@@ -251,37 +240,19 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
 
             ContractionVertex<V> contractedSource = contractionMapping.get(source);
             ContractionVertex<V> contractedTarget = contractionMapping.get(target);
-            Pair<ContractionVertex<V>, ContractionVertex<V>> contractedVertices;
-//            if (reversed) {
-//                contractedVertices = Pair.of(contractedTarget, contractedSource);
-//            } else {
-            contractedVertices = Pair.of(contractedSource, contractedTarget);
-//            }
+            Pair<ContractionVertex<V>, ContractionVertex<V>> contractedVertices =
+                    Pair.of(contractedSource, contractedTarget);
 
             Map<ContractionVertex<V>, Pair<Double, ContractionEdge<E>>> forwardTree
-                    = forwardSearchSpaces.get(contractedVertices.getFirst());
+                    = forwardSearchSpaces.get(contractedSource);
             Map<ContractionVertex<V>, Pair<Double, ContractionEdge<E>>> backwardTree
-                    = backwardSearchSpaces.get(contractedVertices.getSecond());
+                    = backwardSearchSpaces.get(contractedTarget);
 
             Pair<Double, ContractionVertex<V>> distanceAndCommonVertex = middleVertices.get(contractedVertices);
 
             if (distanceAndCommonVertex == null) {
                 return null;
             }
-
-            Consumer<ContractionEdge<E>> forwardSearchUnpackingConsumer;
-            Consumer<ContractionEdge<E>> backwardSearchUnpackingConsumer;
-//            if (reversed) {
-//                forwardSearchUnpackingConsumer = e -> ContractionHierarchyBidirectionalDijkstra.unpackForward(
-//                        contractionGraph, e, vertexList, edgeList);
-//                backwardSearchUnpackingConsumer = e -> ContractionHierarchyBidirectionalDijkstra.unpackBackward(
-//                        contractionGraph, e, vertexList, edgeList);
-//            } else {
-            forwardSearchUnpackingConsumer = e -> ContractionHierarchyBidirectionalDijkstra.unpackBackward(
-                    contractionGraph, e, vertexList, edgeList);
-            backwardSearchUnpackingConsumer = e -> ContractionHierarchyBidirectionalDijkstra.unpackForward(
-                    contractionGraph, e, vertexList, edgeList);
-//            }
 
             ContractionVertex<V> commonVertex = distanceAndCommonVertex.getSecond();
 
@@ -297,12 +268,8 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
                     break;
                 }
 
-                forwardSearchUnpackingConsumer.accept(e);
-//                if (reversed) {
-//                    v = contractionGraph.getEdgeTarget(e);
-//                } else {
+                ContractionHierarchyBidirectionalDijkstra.unpackBackward(contractionGraph, e, vertexList, edgeList);
                 v = contractionGraph.getEdgeSource(e);
-//                }
             }
 
             // traverse reverse path
@@ -314,12 +281,8 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
                     break;
                 }
 
-                backwardSearchUnpackingConsumer.accept(e);
-//                if (reversed) {
-//                    v = contractionGraph.getEdgeSource(e);
-//                } else {
+                ContractionHierarchyBidirectionalDijkstra.unpackForward(contractionGraph, e, vertexList, edgeList);
                 v = contractionGraph.getEdgeTarget(e);
-//                }
             }
 
             return new GraphWalk<>(graph, source, target, vertexList, edgeList, distanceAndCommonVertex.getFirst());
@@ -330,14 +293,8 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
             Objects.requireNonNull(source, "source should not be null!");
             Objects.requireNonNull(target, "target should not be null!");
 
-            ContractionVertex<V> contractedSource = contractionMapping.get(source);
-            ContractionVertex<V> contractedTarget = contractionMapping.get(target);
-            Pair<ContractionVertex<V>, ContractionVertex<V>> contractedVertices;
-//            if (reversed) {
-//                contractedVertices = Pair.of(contractedTarget, contractedSource);
-//            } else {
-            contractedVertices = Pair.of(contractedSource, contractedTarget);
-//            }
+            Pair<ContractionVertex<V>, ContractionVertex<V>> contractedVertices =
+                    Pair.of(contractionMapping.get(source), contractionMapping.get(target));
 
             if (middleVertices.containsKey(contractedVertices)) {
                 return middleVertices.get(contractedVertices).getFirst();
