@@ -49,15 +49,12 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
         Objects.requireNonNull(sources, "sources cannot be null!");
         Objects.requireNonNull(targets, "targets cannot be null!");
 
-        Graph<V, E> searchGraph;
         Graph<ContractionVertex<V>, ContractionEdge<E>> searchContractionGraph;
         boolean reversed;
         if (sources.size() <= targets.size()) {
-//            searchGraph = graph;
             searchContractionGraph = contractionGraph;
             reversed = false;
         } else {
-//            searchGraph = new EdgeReversedGraph<>(graph);
             searchContractionGraph = new EdgeReversedGraph<>(contractionGraph);
             reversed = true;
             List<V> tmp = targets;
@@ -96,7 +93,7 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
 
         return new CHManyToManyShortestPathsImpl(
                 graph,
-                searchContractionGraph,
+                contractionGraph,
                 contractionMapping,
                 forwardSearchSpaces,
                 backwardSearchSpaces,
@@ -219,11 +216,7 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
                                                      Pair<Double, ContractionVertex<V>>> middleVertices,
                                              boolean reversed) {
             this.graph = graph;
-            if (reversed) {
-                this.contractionGraph = new EdgeReversedGraph<>(contractionGraph);
-            } else {
-                this.contractionGraph = contractionGraph;
-            }
+            this.contractionGraph = contractionGraph;
             this.contractionMapping = contractionMapping;
             this.forwardSearchSpaces = forwardSearchSpaces;
             this.backwardSearchSpaces = backwardSearchSpaces;
@@ -312,14 +305,7 @@ public class CHManyToManyShortestPaths<V, E> extends BaseManyTwoManyShortestPath
                 }
             }
 
-//            if (reversed) {
-//                Collections.reverse(vertexList);
-//                Collections.reverse(edgeList);
-//                return new GraphWalk<>(graph, source, target, vertexList, edgeList, distanceAndCommonVertex.getFirst());
-//                return new GraphWalk<>(graph, source, target, vertexList, edgeList, distanceAndCommonVertex.getFirst()).reverse();
-//            } else {
             return new GraphWalk<>(graph, source, target, vertexList, edgeList, distanceAndCommonVertex.getFirst());
-//            }
         }
 
         @Override
