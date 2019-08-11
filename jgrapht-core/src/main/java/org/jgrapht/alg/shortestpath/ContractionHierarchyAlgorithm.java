@@ -506,7 +506,7 @@ public class ContractionHierarchyAlgorithm<V, E> {
         @SuppressWarnings("unchecked")
         List<Pair<ContractionEdge<E>, ContractionEdge<E>>> shortcuts
                 = (List<Pair<ContractionEdge<E>, ContractionEdge<E>>>) shortcutsArray[vertex.vertexId];
-
+//        System.out.println(vertex.vertex);
         // add shortcuts
         for (Pair<ContractionEdge<E>, ContractionEdge<E>> shortcut : shortcuts) {
             ContractionVertex<V> shortcutSource = maskedContractionGraph.getEdgeSource(shortcut.getFirst());
@@ -516,12 +516,17 @@ public class ContractionHierarchyAlgorithm<V, E> {
             double shortcutsWeight = maskedContractionGraph.getEdgeWeight(shortcut.getFirst())
                     + maskedContractionGraph.getEdgeWeight(shortcut.getSecond());
 
+//            System.out.println(shortcutSource.vertex + " " + shortcutTarget.vertex + " " + shortcutsWeight);
             boolean added = contractionGraph.addEdge(shortcutSource, shortcutTarget, shortcutEdge);
 
             if (added) {
                 contractionGraph.setEdgeWeight(shortcutEdge, shortcutsWeight);
             } else { // update weight of already existing edge
-                contractionGraph.setEdgeWeight(contractionGraph.getEdge(shortcutSource, shortcutTarget), shortcutsWeight);
+                ContractionEdge<E> originalEdge = contractionGraph.getEdge(shortcutSource, shortcutTarget);
+                originalEdge.bypassedEdges = shortcut;
+                originalEdge.originalEdges = shortcut.getFirst().originalEdges + shortcut.getSecond().originalEdges;
+                originalEdge.edge = null;
+                contractionGraph.setEdgeWeight(originalEdge, shortcutsWeight);
             }
         }
 

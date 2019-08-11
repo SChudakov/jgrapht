@@ -1,6 +1,7 @@
 package org.jgrapht.alg.shortestpath;
 
 import org.jgrapht.Graph;
+import org.jgrapht.GraphPath;
 import org.jgrapht.Graphs;
 import org.jgrapht.alg.interfaces.ManyToManyShortestPathsAlgorithm;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
@@ -153,6 +154,7 @@ public class BaseManyTwoManyShortestPathsTest {
                         Graph<Integer, DefaultWeightedEdge> graph, List<Integer> sources, List<Integer> targets) {
         ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<Integer, DefaultWeightedEdge> sourcesToTargetsPaths
                 = algorithm.getManyTwoManyPaths(sources, targets);
+
         ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<Integer, DefaultWeightedEdge> sourcesToSourcesPaths
                 = algorithm.getManyTwoManyPaths(sources, sources);
 
@@ -194,12 +196,21 @@ public class BaseManyTwoManyShortestPathsTest {
                                       List<Integer> sources, List<Integer> targets
     ) {
         ShortestPathAlgorithm<Integer, DefaultWeightedEdge> dijkstra = new DijkstraShortestPath<>(graph);
-
         for (Integer source : sources) {
             ShortestPathAlgorithm.SingleSourcePaths<Integer, DefaultWeightedEdge> expectedPaths
                     = dijkstra.getPaths(source);
             for (Integer target : targets) {
-                assertEquals(expectedPaths.getPath(target), paths.getPath(source, target));
+                GraphPath<Integer, DefaultWeightedEdge> expected = expectedPaths.getPath(target);
+                GraphPath<Integer, DefaultWeightedEdge> actual = paths.getPath(source, target);
+//                System.out.println(expected.getVertexList() + " " + expected.getEdgeList() + " " + expected.getWeight());
+//                System.out.println(actual.getVertexList() + " " + actual.getEdgeList() + " " + actual.getWeight());
+//                System.out.println(expected.equals(actual) + " " + expected.getVertexList().equals(actual.getVertexList()) + " " + expected.getEdgeList().equals(actual.getEdgeList()));
+                GraphPath<Integer, DefaultWeightedEdge> b = paths.getPath(source, target);
+
+//                expected.getEdgeList().forEach(e-> System.out.println(e + " " + graph.getEdgeWeight(e)));
+                assertEquals(expected.getWeight(), actual.getWeight(), 1e-9);
+                assertEquals(expected.getVertexList(), actual.getVertexList());
+//                System.out.println();
             }
         }
     }
