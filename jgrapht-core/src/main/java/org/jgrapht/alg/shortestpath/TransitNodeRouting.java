@@ -5,6 +5,9 @@ import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ManyToManyShortestPathsAlgorithm;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 
+import java.util.Map;
+
+import static org.jgrapht.alg.shortestpath.ContractionHierarchy.ContractionVertex;
 import static org.jgrapht.alg.shortestpath.TransitNodeRoutingPreprocessing.AccessVertex;
 import static org.jgrapht.alg.shortestpath.TransitNodeRoutingPreprocessing.AccessVertices;
 import static org.jgrapht.alg.shortestpath.TransitNodeRoutingPreprocessing.LocalityFiler;
@@ -12,23 +15,27 @@ import static org.jgrapht.alg.shortestpath.TransitNodeRoutingPreprocessing.Trans
 
 public class TransitNodeRouting<V, E> extends BaseShortestPathAlgorithm<V, E> {
 
-    private LocalityFiler<V,E> localityFiler;
-    private AccessVertices<V, E> accessVertices;
-    private ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> manyToManyShortestPaths;
+    private Map<V, ContractionVertex<V>> contractionMapping;
+
     private ShortestPathAlgorithm<V, E> localQueriesAlgorithm;
+
+    private ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> manyToManyShortestPaths;
+    private AccessVertices<V, E> accessVertices;
+    private LocalityFiler<V> localityFiler;
 
     /**
      * Constructs a new instance of the algorithm for a given graph.
      *
      * @param graph the graph
      */
-    public TransitNodeRouting(Graph<V, E> graph, TransitNodeRoutingData<V, E> transitNodeRoutingData,
-                              ShortestPathAlgorithm<V, E> localQueriesAlgorithm) {
+    public TransitNodeRouting(Graph<V, E> graph, TransitNodeRoutingData<V, E> transitNodeRoutingData) {
         super(graph);
+        this.contractionMapping = transitNodeRoutingData.contractionMapping;
         this.localityFiler = transitNodeRoutingData.localityFiler;
         this.accessVertices = transitNodeRoutingData.accessVertices;
-//        this.manyToManyShortestPaths = transitNodeRoutingData.manyToManyShortestPaths;
-        this.localQueriesAlgorithm = localQueriesAlgorithm;
+        this.manyToManyShortestPaths = transitNodeRoutingData.manyToManyShortestPaths;
+        this.localQueriesAlgorithm = new ContractionHierarchyBidirectionalDijkstra<>(graph,
+                transitNodeRoutingData.contractionGraph, transitNodeRoutingData.contractionMapping);
     }
 
     @Override
@@ -36,14 +43,17 @@ public class TransitNodeRouting<V, E> extends BaseShortestPathAlgorithm<V, E> {
         if (localityFiler.isLocal(source, sink)) {
             return localQueriesAlgorithm.getPath(source, sink);
         } else {
+            ContractionVertex<V> contractedSource = contractionMapping.get(source);
+            ContractionVertex<V> contractedSink = contractionMapping.get(sink);
+
             AccessVertex<V, E> forwardAccessVertex = null;
             AccessVertex<V, E> backwardAccessVertex = null;
             double minimumWeight = Double.POSITIVE_INFINITY;
 
-            for (AccessVertex<V, E> sourceAccessVertex : accessVertices.getAccessVertices(source)) {
-                for (AccessVertex<V, E> sinkAccessVertex : accessVertices.getAccessVertices(sink)) {
+            for (AccessVertex<V, E> sourceAccessVertex : accessVertices.getForwardAccessVertices(contractedSource)) {
+                for (AccessVertex<V, E> sinkAccessVertex : accessVertices.getBackwardAccessVertices(contractedSink)) {
                     double currentDistance = sourceAccessVertex.path.getWeight() +
-                            manyToManyShortestPaths.getWeight(sourceAccessVertex.vertex, sinkAccessVertex.vertex) +
+                            manyToManyShortestPaths.getWeight(source, sink) +
                             sinkAccessVertex.path.getWeight();
                     if (currentDistance < minimumWeight) {
                         minimumWeight = currentDistance;
@@ -53,9 +63,7 @@ public class TransitNodeRouting<V, E> extends BaseShortestPathAlgorithm<V, E> {
                 }
             }
 
-            return combinePaths(forwardAccessVertex.path,
-                    manyToManyShortestPaths.getPath(forwardAccessVertex.vertex, backwardAccessVertex.vertex),
-                    backwardAccessVertex.path);
+            return combinePaths(forwardAccessVertex.path, manyToManyShortestPaths.getPath(source, sink), backwardAccessVertex.path);
         }
     }
 
