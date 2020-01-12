@@ -31,36 +31,78 @@ public class TransitNodeRouting<V, E> {
     private int numberOfTransitVertices;
 
     private ManyToManyShortestPathsAlgorithm<V, E> manyToManyShortestPathsAlgorithm;
+    private TransitVerticesSelection<V> transitVerticesSelection;
+
+    public TransitNodeRouting(Graph<V, E> graph) {
+        Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>, Map<V, ContractionVertex<V>>> p
+                = new ContractionHierarchy<>(graph).computeContractionHierarchy();
+        init(graph, p.getFirst(), p.getSecond(), Math.max(1, (int) Math.sqrt(graph.vertexSet().size())),
+                new TopKTransitVerticesSelection(p.getFirst()));
+    }
+
+    public TransitNodeRouting(Graph<V, E> graph, TransitVerticesSelection<V> transitVerticesSelection) {
+        Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>, Map<V, ContractionVertex<V>>> p
+                = new ContractionHierarchy<>(graph).computeContractionHierarchy();
+        init(graph, p.getFirst(), p.getSecond(), Math.max(1, (int) Math.sqrt(graph.vertexSet().size())), transitVerticesSelection);
+    }
+
+    public TransitNodeRouting(Graph<V, E> graph,
+                              Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                              Map<V, ContractionVertex<V>> contractionMapping) {
+        init(graph, contractionGraph, contractionMapping, (int) Math.sqrt(graph.vertexSet().size()),
+                new TopKTransitVerticesSelection(contractionGraph));
+    }
 
     public TransitNodeRouting(Graph<V, E> graph,
                               Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
                               Map<V, ContractionVertex<V>> contractionMapping, int numberOfTransitVertices) {
+        init(graph, contractionGraph, contractionMapping, numberOfTransitVertices, new TopKTransitVerticesSelection(contractionGraph));
+    }
+
+    public TransitNodeRouting(Graph<V, E> graph,
+                              Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                              Map<V, ContractionVertex<V>> contractionMapping, int numberOfTransitVertices,
+                              TransitVerticesSelection<V> transitVerticesSelection) {
+        init(graph, contractionGraph, contractionMapping, numberOfTransitVertices, transitVerticesSelection);
+    }
+
+    private void init(Graph<V, E> graph,
+                      Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                      Map<V, ContractionVertex<V>> contractionMapping, int numberOfTransitVertices,
+                      TransitVerticesSelection<V> transitVerticesSelection) {
+        if (numberOfTransitVertices > graph.vertexSet().size()) {
+            throw new IllegalArgumentException("numberOfTransitVertices is larger than the number of vertices in the graph");
+        }
         this.contractionGraph = contractionGraph;
         this.contractionMapping = contractionMapping;
         this.numberOfTransitVertices = numberOfTransitVertices;
         this.manyToManyShortestPathsAlgorithm = new CHManyToManyShortestPaths<>(graph, contractionGraph, contractionMapping);
+        this.transitVerticesSelection = transitVerticesSelection;
     }
 
-    public TransitNodeRoutingData<V, E> computeTransitNodeRoutingData() {
-        TransitVerticesSelection<V, E> transitVerticesSelection = new TransitVerticesSelection<>(contractionGraph);
-        Set<ContractionVertex<V>> transitVertices = transitVerticesSelection.getTransitVertices(numberOfTransitVertices);
 
-        VoronoiDiagramComputation<V, E> voronoiDiagramComputation = new VoronoiDiagramComputation<>(contractionGraph, transitVertices);
+    public TransitNodeRoutingData<V, E> computeTransitNodeRoutingData() {
+        Set<V> transitVertices = transitVerticesSelection.getTransitVertices(numberOfTransitVertices);
+        Set<ContractionVertex<V>> contractedTransitVertices = transitVertices.stream()
+                .map(v -> contractionMapping.get(v)).collect(Collectors.toCollection(HashSet::new));
+
+        VoronoiDiagramComputation<V, E> voronoiDiagramComputation = new VoronoiDiagramComputation<>(
+                contractionGraph, contractedTransitVertices);
         VoronoiDiagram<V> voronoiDiagram = voronoiDiagramComputation.computeVoronoiDiagram();
 
         // TODO: check possibility to compute both packed and unpacked transit nodes by @TransitNodesSelection
-        Set<V> unpackedTransitVertices = transitVertices.stream().map(v -> v.vertex).collect(Collectors.toCollection(HashSet::new));
+        Set<V> unpackedTransitVertices = contractedTransitVertices.stream().map(v -> v.vertex).collect(Collectors.toCollection(HashSet::new));
         ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E>
                 transitVerticesPaths = manyToManyShortestPathsAlgorithm.getManyToManyPaths(unpackedTransitVertices, unpackedTransitVertices);
 
-        AccessVerticesDetermination<V, E> accessVerticesDetermination = new AccessVerticesDetermination<>(contractionGraph,
-                contractionMapping, transitVertices, voronoiDiagram, manyToManyShortestPathsAlgorithm, transitVerticesPaths);
-        Pair<AccessVertices<V, E>, LocalityFiler<V>> p = accessVerticesDetermination.performComputation();
+        AVAndLFComputation<V, E> AVAndLFComputation = new AVAndLFComputation<>(contractionGraph,
+                contractionMapping, contractedTransitVertices, voronoiDiagram, manyToManyShortestPathsAlgorithm, transitVerticesPaths);
+        Pair<AccessVertices<V, E>, LocalityFiler<V>> p = AVAndLFComputation.computeAVAndLF();
 
         AccessVertices<V, E> accessVertices = p.getFirst();
         LocalityFiler<V> localityFiler = p.getSecond();
 
-        return new TransitNodeRoutingData<>(contractionGraph, contractionMapping,
+        return new TransitNodeRoutingData<>(contractionGraph, contractionMapping, contractedTransitVertices,
                 transitVerticesPaths, localityFiler, accessVertices);
     }
 
@@ -69,6 +111,7 @@ public class TransitNodeRouting<V, E> {
         private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
         private Map<V, ContractionVertex<V>> contractionMapping;
 
+        private Set<ContractionVertex<V>> transitVertices;
         private ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesPaths;
         private LocalityFiler<V> localityFiler;
         private AccessVertices<V, E> accessVertices;
@@ -79,6 +122,10 @@ public class TransitNodeRouting<V, E> {
 
         public Map<V, ContractionVertex<V>> getContractionMapping() {
             return contractionMapping;
+        }
+
+        public Set<ContractionVertex<V>> getTransitVertices() {
+            return transitVertices;
         }
 
         public ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> getTransitVerticesPaths() {
@@ -95,31 +142,36 @@ public class TransitNodeRouting<V, E> {
 
         public TransitNodeRoutingData(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
                                       Map<V, ContractionVertex<V>> contractionMapping,
+                                      Set<ContractionVertex<V>> transitVertices,
                                       ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesPaths,
                                       LocalityFiler<V> localityFiler,
                                       AccessVertices<V, E> accessVertices) {
             this.contractionGraph = contractionGraph;
             this.contractionMapping = contractionMapping;
+            this.transitVertices = transitVertices;
             this.transitVerticesPaths = transitVerticesPaths;
             this.localityFiler = localityFiler;
             this.accessVertices = accessVertices;
         }
     }
 
-    // TODO: make selection polity a parameter of this class (better heuristics in the future)
-    private static class TransitVerticesSelection<V, E> {
+    public interface TransitVerticesSelection<V> {
+        Set<V> getTransitVertices(int numOfTransitVertices);
+    }
+
+    private class TopKTransitVerticesSelection implements TransitVerticesSelection<V> {
         private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
 
-        TransitVerticesSelection(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph) {
+        TopKTransitVerticesSelection(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph) {
             this.contractionGraph = contractionGraph;
         }
 
-        Set<ContractionVertex<V>> getTransitVertices(int numOfTransitVertices) {
+        public Set<V> getTransitVertices(int numOfTransitVertices) {
             int numOfVertices = contractionGraph.vertexSet().size();
-            Set<ContractionVertex<V>> result = new HashSet<>();
+            Set<V> result = new HashSet<>();
             for (ContractionVertex<V> vertex : contractionGraph.vertexSet()) {
                 if (vertex.contractionLevel >= numOfVertices - numOfTransitVertices) {
-                    result.add(vertex);
+                    result.add(vertex.vertex);
                 }
             }
             return result;
@@ -146,11 +198,12 @@ public class TransitNodeRouting<V, E> {
         }
 
         VoronoiDiagram<V> computeVoronoiDiagram() {
-            voronoiCells = new ArrayList<>(contractionGraph.vertexSet().size());
-            distanceToCenter = new ArrayList<>(contractionGraph.vertexSet().size());
-            for (int i = 0; i < transitVertices.size(); ++i) {
+            int numberOfVertices = contractionGraph.vertexSet().size();
+            voronoiCells = new ArrayList<>(numberOfVertices);
+            distanceToCenter = new ArrayList<>(numberOfVertices);
+            for (int i = 0; i < numberOfVertices; ++i) {
                 voronoiCells.add(null);
-                distanceToCenter.add(null);
+                distanceToCenter.add(Double.POSITIVE_INFINITY);
             }
 
             Graph<ContractionVertex<V>, ContractionEdge<E>> searchGraph = new EdgeReversedGraph<>(contractionGraph);
@@ -215,8 +268,7 @@ public class TransitNodeRouting<V, E> {
         }
     }
 
-    // TODO: find better name to address locality filter computation
-    private static class AccessVerticesDetermination<V, E> {
+    private static class AVAndLFComputation<V, E> {
         private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
         private Map<V, ContractionVertex<V>> contractionMapping;
 
@@ -225,12 +277,12 @@ public class TransitNodeRouting<V, E> {
         private ManyToManyShortestPathsAlgorithm<V, E> manyToManyShortestPathsAlgorithm;
         private ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesPaths;
 
-        public AccessVerticesDetermination(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
-                                           Map<V, ContractionVertex<V>> contractionMapping,
-                                           Set<ContractionVertex<V>> transitVertices,
-                                           VoronoiDiagram<V> voronoiDiagram,
-                                           ManyToManyShortestPathsAlgorithm<V, E> manyToManyShortestPathsAlgorithm,
-                                           ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesPaths) {
+        public AVAndLFComputation(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                                  Map<V, ContractionVertex<V>> contractionMapping,
+                                  Set<ContractionVertex<V>> transitVertices,
+                                  VoronoiDiagram<V> voronoiDiagram,
+                                  ManyToManyShortestPathsAlgorithm<V, E> manyToManyShortestPathsAlgorithm,
+                                  ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesPaths) {
             this.contractionGraph = contractionGraph;
             this.contractionMapping = contractionMapping;
             this.transitVertices = transitVertices;
@@ -239,7 +291,7 @@ public class TransitNodeRouting<V, E> {
             this.transitVerticesPaths = transitVerticesPaths;
         }
 
-        public Pair<AccessVertices<V, E>, LocalityFiler<V>> performComputation() {
+        public Pair<AccessVertices<V, E>, LocalityFiler<V>> computeAVAndLF() {
             LocalityFilterBuilder<V> localityFilterBuilder =
                     new LocalityFilterBuilder<>(contractionGraph.vertexSet().size());
 
@@ -335,6 +387,10 @@ public class TransitNodeRouting<V, E> {
             Set<Integer> sourceVisitedVoronoiCells = visitedForwardVoronoiCells.get(contractedSource.vertexId);
             Set<Integer> sinkVisitedVoronoiCells = visitedBackwardVoronoiCells.get(contractedSink.vertexId);
 
+            if (sourceVisitedVoronoiCells.contains(null) || sinkVisitedVoronoiCells.contains(null)) {
+                return true;
+            }
+
             Set<Integer> smallerSet;
             Set<Integer> largerSet;
             if (sourceVisitedVoronoiCells.size() <= sinkVisitedVoronoiCells.size()) {
@@ -421,7 +477,7 @@ public class TransitNodeRouting<V, E> {
 
         public AccessVerticesBuilder(ManyToManyShortestPathsAlgorithm<V, E> manyToManyShortestPathsAlgorithm,
                                      ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E>
-                                                 transitVerticesDistances, int numberOfVertices) {
+                                             transitVerticesDistances, int numberOfVertices) {
             this.manyToManyShortestPathsAlgorithm = manyToManyShortestPathsAlgorithm;
             this.transitVerticesDistances = transitVerticesDistances;
 
@@ -448,7 +504,7 @@ public class TransitNodeRouting<V, E> {
             List<AccessVertex<V, E>> accessVerticesList = forwardAccessVertices.get(v.vertexId);
             for (V unpackedVertex : unpackedVertices) {
                 if (!prunedVertices.contains(unpackedVertex)) {
-                    accessVerticesList.add(new AccessVertex<>(v.vertex, manyToManyShortestPaths.getPath(v.vertex, unpackedVertex)));
+                    accessVerticesList.add(new AccessVertex<>(unpackedVertex, manyToManyShortestPaths.getPath(v.vertex, unpackedVertex)));
                 }
             }
         }
@@ -464,7 +520,7 @@ public class TransitNodeRouting<V, E> {
             List<AccessVertex<V, E>> accessVerticesList = backwardAccessVertices.get(v.vertexId);
             for (V unpackedVertex : unpackedVertices) {
                 if (!prunedVertices.contains(unpackedVertex)) {
-                    accessVerticesList.add(new AccessVertex<>(v.vertex, manyToManyShortestPaths.getPath(unpackedVertex, v.vertex)));
+                    accessVerticesList.add(new AccessVertex<>(unpackedVertex, manyToManyShortestPaths.getPath(unpackedVertex, v.vertex)));
                 }
             }
         }
@@ -476,7 +532,7 @@ public class TransitNodeRouting<V, E> {
             for (V v1 : vertices) {
                 if (!result.contains(v1)) {
                     for (V v2 : vertices) {
-                        if (!result.contains(v2)) {
+                        if (!v1.equals(v2) && !result.contains(v2)) {
                             if (forwardAccessVertices) {
                                 if (manyToManyShortestPaths.getWeight(v, v1) + transitVerticesDistances.getWeight(v1, v2)
                                         <= manyToManyShortestPaths.getWeight(v, v2)) {
