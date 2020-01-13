@@ -73,6 +73,7 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         this.contractionMapping = contractionMapping;
         this.numberOfTransitVertices = numberOfTransitVertices;
         this.manyToManyShortestPathsAlgorithm = new CHManyToManyShortestPaths<>(graph, contractionGraph, contractionMapping);
+        System.out.println("number of transit vertices: " + numberOfTransitVertices);
     }
 
 
@@ -85,6 +86,7 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         VoronoiDiagramComputation<V, E> voronoiDiagramComputation = new VoronoiDiagramComputation<>(
                 contractionGraph, contractedTransitVertices);
         VoronoiDiagram<V> voronoiDiagram = voronoiDiagramComputation.computeVoronoiDiagram();
+        voronoiDiagramStatistics(voronoiDiagram);
 
         // TODO: check possibility to compute both packed and unpacked transit nodes by @TransitNodesSelection
         Set<V> unpackedTransitVertices = contractedTransitVertices.stream().map(v -> v.vertex).collect(Collectors.toCollection(HashSet::new));
@@ -97,6 +99,8 @@ public class TransitNodeRoutingPrecomputation<V, E> {
 
         AccessVertices<V, E> accessVertices = p.getFirst();
         LocalityFiler<V> localityFiler = p.getSecond();
+        accessVerticesStatistics(accessVertices);
+        localityFilterStatistics(localityFiler);
 
         return new TransitNodeRouting<>(contractionGraph, contractionMapping, contractedTransitVertices,
                 transitVerticesPaths, localityFiler, accessVertices);
@@ -261,6 +265,7 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         }
     }
 
+
     private static class AVAndLFComputation<V, E> {
         private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
         private Map<V, ContractionVertex<V>> contractionMapping;
@@ -296,7 +301,9 @@ public class TransitNodeRoutingPrecomputation<V, E> {
             CoveringSearch<V, E> backwardSearch = new CoveringSearch<>(new MaskSubgraph<>(new EdgeReversedGraph<>(
                     contractionGraph), v -> false, e -> e.isUpward), transitVertices, voronoiDiagram);
 
+            int vertex = 0;
             for (ContractionVertex<V> v : contractionGraph.vertexSet()) {
+                System.out.println(++vertex);
                 Pair<Set<ContractionVertex<V>>, Set<Integer>> forwardSearchData = forwardSearch.runSearch(v);
                 Pair<Set<ContractionVertex<V>>, Set<Integer>> backwardSearchData = backwardSearch.runSearch(v);
 
@@ -543,5 +550,79 @@ public class TransitNodeRoutingPrecomputation<V, E> {
             }
             return result;
         }
+    }
+
+    private void voronoiDiagramStatistics(VoronoiDiagram<V> voronoiDiagram) {
+        Map<Integer, Integer> counts = new HashMap<>();
+
+        for (Integer id : voronoiDiagram.voronoiCells) {
+            counts.compute(id, (key, value) -> {
+                if (value == null) {
+                    return 1;
+                }
+                return value + 1;
+            });
+        }
+
+        List<Integer> sizes = new ArrayList<>(counts.values());
+        sizes.sort(Integer::compareTo);
+        System.out.println("voronoi cells sizes: " + sizes);
+
+        int max = sizes.stream().max(Integer::compareTo).get();
+        int min = sizes.stream().min(Integer::compareTo).get();
+        double avg = sizes.stream().reduce((i1, i2) -> i1 + i2).get() / 149;
+
+        System.out.println("max cell size: " + max);
+        System.out.println("min cell size: " + min);
+        System.out.println("avg cell size: " + avg);
+    }
+
+    private void accessVerticesStatistics(AccessVertices<V, E> accessVertices) {
+        List<Integer> forwardAccessVerticesSizes = accessVertices.forwardAccessVertices.stream().map(av -> av.size()).collect(Collectors.toList());
+        forwardAccessVerticesSizes.sort(Integer::compareTo);
+        System.out.println("forward access vertices sizes: " + forwardAccessVerticesSizes);
+
+        int forwardMax = forwardAccessVerticesSizes.stream().max(Integer::compareTo).get();
+        int forwardMin = forwardAccessVerticesSizes.stream().min(Integer::compareTo).get();
+        double forwardAvg = forwardAccessVerticesSizes.stream().reduce((i1, i2) -> i1 + i2).get() / (double) contractionGraph.vertexSet().size();
+
+        System.out.println("max forward access vertices size: " + forwardMax);
+        System.out.println("min forward access vertices size: " + forwardMin);
+        System.out.println("avg forward access vertices size: " + forwardAvg);
+
+        List<Integer> backwardAccessVerticesSizes = accessVertices.backwardAccessVertices.stream().map(av -> av.size()).collect(Collectors.toList());
+        backwardAccessVerticesSizes.sort(Integer::compareTo);
+        System.out.println("backward access vertices sizes: " + forwardAccessVerticesSizes);
+        int backwardMax = backwardAccessVerticesSizes.stream().max(Integer::compareTo).get();
+        int backwardMin = backwardAccessVerticesSizes.stream().min(Integer::compareTo).get();
+        double backwardAvg = backwardAccessVerticesSizes.stream().reduce((i1, i2) -> i1 + i2).get() / (double) contractionGraph.vertexSet().size();
+
+        System.out.println("max backward access vertices size: " + backwardMax);
+        System.out.println("min backward access vertices size: " + backwardMin);
+        System.out.println("avg backward access vertices size: " + backwardAvg);
+    }
+
+    private void localityFilterStatistics(LocalityFiler<V> localityFiler) {
+        List<Integer> forwardVisitedVoronoiCells = localityFiler.visitedForwardVoronoiCells.stream().map(av -> av.size()).collect(Collectors.toList());
+        forwardVisitedVoronoiCells.sort(Integer::compareTo);
+        System.out.println("forward visited voronoi cells: " + forwardVisitedVoronoiCells);
+        int forwardMax = forwardVisitedVoronoiCells.stream().max(Integer::compareTo).get();
+        int forwardMin = forwardVisitedVoronoiCells.stream().min(Integer::compareTo).get();
+        double forwardAvg = forwardVisitedVoronoiCells.stream().reduce((i1, i2) -> i1 + i2).get() / (double) contractionGraph.vertexSet().size();
+
+        System.out.println("max forward visited voronoi cells size: " + forwardMax);
+        System.out.println("min forward visited voronoi cells size: " + forwardMin);
+        System.out.println("avg forward visited voronoi cells size: " + forwardAvg);
+
+        List<Integer> backwardVisitedVoronoiCells = localityFiler.visitedBackwardVoronoiCells.stream().map(av -> av.size()).collect(Collectors.toList());
+        backwardVisitedVoronoiCells.sort(Integer::compareTo);
+        System.out.println("backward visited voronoi cells sizes: " + backwardVisitedVoronoiCells);
+        int backwardMax = backwardVisitedVoronoiCells.stream().max(Integer::compareTo).get();
+        int backwardMin = backwardVisitedVoronoiCells.stream().min(Integer::compareTo).get();
+        double backwardAvg = backwardVisitedVoronoiCells.stream().reduce((i1, i2) -> i1 + i2).get() / (double) contractionGraph.vertexSet().size();
+
+        System.out.println("max forward visited voronoi cells size: " + backwardMax);
+        System.out.println("min forward visited voronoi cells size: " + backwardMin);
+        System.out.println("avg forward visited voronoi cells size: " + backwardAvg);
     }
 }
