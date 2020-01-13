@@ -21,7 +21,7 @@ import java.util.Set;
 
 import static org.jgrapht.alg.shortestpath.ContractionHierarchy.ContractionEdge;
 import static org.jgrapht.alg.shortestpath.ContractionHierarchy.ContractionVertex;
-import static org.jgrapht.alg.shortestpath.TransitNodeRouting.TransitNodeRoutingData;
+import static org.jgrapht.alg.shortestpath.TransitNodeRoutingPrecomputation.TransitNodeRouting;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -56,10 +56,10 @@ public class TransitNodeRoutingShortestPathTest {
                 Map<Integer, ContractionVertex<Integer>>> p =
                 new ContractionHierarchy<>(graph, () -> new Random(SEED)).computeContractionHierarchy();
 
-        TransitNodeRoutingData<Integer, DefaultWeightedEdge> data = new TransitNodeRouting<>(
-                graph, p.getFirst(), p.getSecond(), 1).computeTransitNodeRoutingData();
+        TransitNodeRouting<Integer, DefaultWeightedEdge> routing = new TransitNodeRoutingPrecomputation<>(
+                graph, p.getFirst(), p.getSecond(), 1).computeTransitNodeRouting();
         TransitNodeRoutingShortestPath<Integer, DefaultWeightedEdge> shortestPath
-                = new TransitNodeRoutingShortestPath<>(graph, data);
+                = new TransitNodeRoutingShortestPath<>(graph, routing);
 
         GraphPath<Integer, DefaultWeightedEdge> expectedPath1 = new GraphWalk<>(
                 graph, v1, v2, Arrays.asList(v1, v2), Collections.singletonList(edge1), 1.0);
@@ -85,10 +85,10 @@ public class TransitNodeRoutingShortestPathTest {
                 Map<Integer, ContractionVertex<Integer>>> p =
                 new ContractionHierarchy<>(graph, () -> new Random(SEED)).computeContractionHierarchy();
 
-        TransitNodeRoutingData<Integer, DefaultWeightedEdge> data = new TransitNodeRouting<>(
-                graph, p.getFirst(), p.getSecond(), 1).computeTransitNodeRoutingData();
+        TransitNodeRouting<Integer, DefaultWeightedEdge> routing = new TransitNodeRoutingPrecomputation<>(
+                graph, p.getFirst(), p.getSecond(), 1).computeTransitNodeRouting();
         TransitNodeRoutingShortestPath<Integer, DefaultWeightedEdge> shortestPath
-                = new TransitNodeRoutingShortestPath<>(graph, data);
+                = new TransitNodeRoutingShortestPath<>(graph, routing);
 
         GraphPath<Integer, DefaultWeightedEdge> expectedPath1 = new GraphWalk<>(
                 graph, v1, v2, Arrays.asList(v1, v2), Collections.singletonList(edge1), 1.0);
@@ -136,11 +136,11 @@ public class TransitNodeRoutingShortestPathTest {
                 Map<Integer, ContractionVertex<Integer>>> p
                 = new ContractionHierarchy<>(graph, () -> new Random(SEED)).computeContractionHierarchy();
 
-        TransitNodeRoutingData<Integer, DefaultWeightedEdge> data = new TransitNodeRouting<>(
-                graph, p.getFirst(), p.getSecond()).computeTransitNodeRoutingData();
+        TransitNodeRouting<Integer, DefaultWeightedEdge> routing = new TransitNodeRoutingPrecomputation<>(
+                graph, p.getFirst(), p.getSecond()).computeTransitNodeRouting();
 
         TransitNodeRoutingShortestPath<Integer, DefaultWeightedEdge> transitNodeRoutingShortestPath
-                = new TransitNodeRoutingShortestPath<>(graph, data);
+                = new TransitNodeRoutingShortestPath<>(graph, routing);
         ShortestPathAlgorithm.SingleSourcePaths<Integer, DefaultWeightedEdge> tnrShortestPaths = transitNodeRoutingShortestPath.getPaths(source);
 
 

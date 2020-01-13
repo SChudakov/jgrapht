@@ -11,10 +11,10 @@ import java.util.List;
 import java.util.Map;
 
 import static org.jgrapht.alg.shortestpath.ContractionHierarchy.ContractionVertex;
-import static org.jgrapht.alg.shortestpath.TransitNodeRouting.AccessVertex;
-import static org.jgrapht.alg.shortestpath.TransitNodeRouting.AccessVertices;
-import static org.jgrapht.alg.shortestpath.TransitNodeRouting.LocalityFiler;
-import static org.jgrapht.alg.shortestpath.TransitNodeRouting.TransitNodeRoutingData;
+import static org.jgrapht.alg.shortestpath.TransitNodeRoutingPrecomputation.AccessVertex;
+import static org.jgrapht.alg.shortestpath.TransitNodeRoutingPrecomputation.AccessVertices;
+import static org.jgrapht.alg.shortestpath.TransitNodeRoutingPrecomputation.LocalityFiler;
+import static org.jgrapht.alg.shortestpath.TransitNodeRoutingPrecomputation.TransitNodeRouting;
 
 public class TransitNodeRoutingShortestPath<V, E> extends BaseShortestPathAlgorithm<V, E> {
 
@@ -30,7 +30,7 @@ public class TransitNodeRoutingShortestPath<V, E> extends BaseShortestPathAlgori
 
     public TransitNodeRoutingShortestPath(Graph<V, E> graph) {
         super(graph);
-        init(new TransitNodeRouting<>(graph).computeTransitNodeRoutingData());
+        init(new TransitNodeRoutingPrecomputation<>(graph).computeTransitNodeRouting());
     }
 
     /**
@@ -38,18 +38,18 @@ public class TransitNodeRoutingShortestPath<V, E> extends BaseShortestPathAlgori
      *
      * @param graph the graph
      */
-    public TransitNodeRoutingShortestPath(Graph<V, E> graph, TransitNodeRoutingData<V, E> transitNodeRoutingData) {
+    public TransitNodeRoutingShortestPath(Graph<V, E> graph, TransitNodeRouting<V, E> transitNodeRouting) {
         super(graph);
-        init(transitNodeRoutingData);
+        init(transitNodeRouting);
     }
 
-    private void init(TransitNodeRoutingData<V, E> transitNodeRoutingData) {
-        this.contractionMapping = transitNodeRoutingData.getContractionMapping();
-        this.localityFiler = transitNodeRoutingData.getLocalityFiler();
-        this.accessVertices = transitNodeRoutingData.getAccessVertices();
-        this.manyToManyShortestPaths = transitNodeRoutingData.getTransitVerticesPaths();
+    private void init(TransitNodeRouting<V, E> transitNodeRouting) {
+        this.contractionMapping = transitNodeRouting.getContractionMapping();
+        this.localityFiler = transitNodeRouting.getLocalityFiler();
+        this.accessVertices = transitNodeRouting.getAccessVertices();
+        this.manyToManyShortestPaths = transitNodeRouting.getTransitVerticesPaths();
         this.localQueriesAlgorithm = new ContractionHierarchyBidirectionalDijkstra<>(graph,
-                transitNodeRoutingData.getContractionGraph(), transitNodeRoutingData.getContractionMapping());
+                transitNodeRouting.getContractionGraph(), transitNodeRouting.getContractionMapping());
     }
 
     @Override

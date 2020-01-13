@@ -24,52 +24,48 @@ import java.util.stream.Collectors;
 import static org.jgrapht.alg.shortestpath.ContractionHierarchy.ContractionEdge;
 import static org.jgrapht.alg.shortestpath.ContractionHierarchy.ContractionVertex;
 
-public class TransitNodeRouting<V, E> {
+public class TransitNodeRoutingPrecomputation<V, E> {
 
     private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
     private Map<V, ContractionVertex<V>> contractionMapping;
     private int numberOfTransitVertices;
 
     private ManyToManyShortestPathsAlgorithm<V, E> manyToManyShortestPathsAlgorithm;
-    private TransitVerticesSelection<V> transitVerticesSelection;
 
-    public TransitNodeRouting(Graph<V, E> graph) {
+    public TransitNodeRoutingPrecomputation(Graph<V, E> graph) {
         Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>, Map<V, ContractionVertex<V>>> p
                 = new ContractionHierarchy<>(graph).computeContractionHierarchy();
-        init(graph, p.getFirst(), p.getSecond(), Math.max(1, (int) Math.sqrt(graph.vertexSet().size())),
-                new TopKTransitVerticesSelection(p.getFirst()));
+        init(graph, p.getFirst(), p.getSecond(), Math.max(1, (int) Math.sqrt(graph.vertexSet().size())));
     }
 
-    public TransitNodeRouting(Graph<V, E> graph, TransitVerticesSelection<V> transitVerticesSelection) {
+    public TransitNodeRoutingPrecomputation(Graph<V, E> graph, TransitVerticesSelection<V> transitVerticesSelection) {
         Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>, Map<V, ContractionVertex<V>>> p
                 = new ContractionHierarchy<>(graph).computeContractionHierarchy();
-        init(graph, p.getFirst(), p.getSecond(), Math.max(1, (int) Math.sqrt(graph.vertexSet().size())), transitVerticesSelection);
+        init(graph, p.getFirst(), p.getSecond(), Math.max(1, (int) Math.sqrt(graph.vertexSet().size())));
     }
 
-    public TransitNodeRouting(Graph<V, E> graph,
-                              Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
-                              Map<V, ContractionVertex<V>> contractionMapping) {
-        init(graph, contractionGraph, contractionMapping, (int) Math.sqrt(graph.vertexSet().size()),
-                new TopKTransitVerticesSelection(contractionGraph));
+    public TransitNodeRoutingPrecomputation(Graph<V, E> graph,
+                                            Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                                            Map<V, ContractionVertex<V>> contractionMapping) {
+        init(graph, contractionGraph, contractionMapping, (int) Math.sqrt(graph.vertexSet().size()));
     }
 
-    public TransitNodeRouting(Graph<V, E> graph,
-                              Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
-                              Map<V, ContractionVertex<V>> contractionMapping, int numberOfTransitVertices) {
-        init(graph, contractionGraph, contractionMapping, numberOfTransitVertices, new TopKTransitVerticesSelection(contractionGraph));
+    public TransitNodeRoutingPrecomputation(Graph<V, E> graph,
+                                            Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                                            Map<V, ContractionVertex<V>> contractionMapping, int numberOfTransitVertices) {
+        init(graph, contractionGraph, contractionMapping, numberOfTransitVertices);
     }
 
-    public TransitNodeRouting(Graph<V, E> graph,
-                              Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
-                              Map<V, ContractionVertex<V>> contractionMapping, int numberOfTransitVertices,
-                              TransitVerticesSelection<V> transitVerticesSelection) {
-        init(graph, contractionGraph, contractionMapping, numberOfTransitVertices, transitVerticesSelection);
+    public TransitNodeRoutingPrecomputation(Graph<V, E> graph,
+                                            Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                                            Map<V, ContractionVertex<V>> contractionMapping, int numberOfTransitVertices,
+                                            TransitVerticesSelection<V> transitVerticesSelection) {
+        init(graph, contractionGraph, contractionMapping, numberOfTransitVertices);
     }
 
     private void init(Graph<V, E> graph,
                       Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
-                      Map<V, ContractionVertex<V>> contractionMapping, int numberOfTransitVertices,
-                      TransitVerticesSelection<V> transitVerticesSelection) {
+                      Map<V, ContractionVertex<V>> contractionMapping, int numberOfTransitVertices) {
         if (numberOfTransitVertices > graph.vertexSet().size()) {
             throw new IllegalArgumentException("numberOfTransitVertices is larger than the number of vertices in the graph");
         }
@@ -77,11 +73,11 @@ public class TransitNodeRouting<V, E> {
         this.contractionMapping = contractionMapping;
         this.numberOfTransitVertices = numberOfTransitVertices;
         this.manyToManyShortestPathsAlgorithm = new CHManyToManyShortestPaths<>(graph, contractionGraph, contractionMapping);
-        this.transitVerticesSelection = transitVerticesSelection;
     }
 
 
-    public TransitNodeRoutingData<V, E> computeTransitNodeRoutingData() {
+    public TransitNodeRouting<V, E> computeTransitNodeRouting() {
+        TransitVerticesSelection<V> transitVerticesSelection = new TransitVerticesSelection<>(contractionGraph);
         Set<V> transitVertices = transitVerticesSelection.getTransitVertices(numberOfTransitVertices);
         Set<ContractionVertex<V>> contractedTransitVertices = transitVertices.stream()
                 .map(v -> contractionMapping.get(v)).collect(Collectors.toCollection(HashSet::new));
@@ -102,12 +98,12 @@ public class TransitNodeRouting<V, E> {
         AccessVertices<V, E> accessVertices = p.getFirst();
         LocalityFiler<V> localityFiler = p.getSecond();
 
-        return new TransitNodeRoutingData<>(contractionGraph, contractionMapping, contractedTransitVertices,
+        return new TransitNodeRouting<>(contractionGraph, contractionMapping, contractedTransitVertices,
                 transitVerticesPaths, localityFiler, accessVertices);
     }
 
 
-    public static class TransitNodeRoutingData<V, E> {
+    public static class TransitNodeRouting<V, E> {
         private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
         private Map<V, ContractionVertex<V>> contractionMapping;
 
@@ -140,12 +136,12 @@ public class TransitNodeRouting<V, E> {
             return accessVertices;
         }
 
-        public TransitNodeRoutingData(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
-                                      Map<V, ContractionVertex<V>> contractionMapping,
-                                      Set<ContractionVertex<V>> transitVertices,
-                                      ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesPaths,
-                                      LocalityFiler<V> localityFiler,
-                                      AccessVertices<V, E> accessVertices) {
+        public TransitNodeRouting(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                                  Map<V, ContractionVertex<V>> contractionMapping,
+                                  Set<ContractionVertex<V>> transitVertices,
+                                  ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesPaths,
+                                  LocalityFiler<V> localityFiler,
+                                  AccessVertices<V, E> accessVertices) {
             this.contractionGraph = contractionGraph;
             this.contractionMapping = contractionMapping;
             this.transitVertices = transitVertices;
@@ -155,14 +151,11 @@ public class TransitNodeRouting<V, E> {
         }
     }
 
-    public interface TransitVerticesSelection<V> {
-        Set<V> getTransitVertices(int numOfTransitVertices);
-    }
 
-    private class TopKTransitVerticesSelection implements TransitVerticesSelection<V> {
+    private class TransitVerticesSelection<V> {
         private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
 
-        TopKTransitVerticesSelection(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph) {
+        TransitVerticesSelection(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph) {
             this.contractionGraph = contractionGraph;
         }
 
