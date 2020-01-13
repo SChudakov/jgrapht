@@ -301,9 +301,9 @@ public class TransitNodeRoutingPrecomputation<V, E> {
             CoveringSearch<V, E> backwardSearch = new CoveringSearch<>(new MaskSubgraph<>(new EdgeReversedGraph<>(
                     contractionGraph), v -> false, e -> e.isUpward), transitVertices, voronoiDiagram);
 
-            int vertex = 0;
+//            int vertex = 0;
             for (ContractionVertex<V> v : contractionGraph.vertexSet()) {
-                System.out.println(++vertex);
+//                System.out.println(++vertex);
                 Pair<Set<ContractionVertex<V>>, Set<Integer>> forwardSearchData = forwardSearch.runSearch(v);
                 Pair<Set<ContractionVertex<V>>, Set<Integer>> backwardSearchData = backwardSearch.runSearch(v);
 

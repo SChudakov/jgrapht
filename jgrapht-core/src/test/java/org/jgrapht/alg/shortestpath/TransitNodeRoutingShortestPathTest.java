@@ -10,6 +10,7 @@ import org.jgrapht.generate.GraphGenerator;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.DirectedWeightedPseudograph;
 import org.jgrapht.graph.GraphWalk;
+import org.jgrapht.graph.SimpleDirectedWeightedGraph;
 import org.jgrapht.util.SupplierUtil;
 import org.junit.Test;
 
@@ -128,20 +129,20 @@ public class TransitNodeRoutingShortestPathTest {
      * @param graph  graph
      * @param source vertex in {@code graph}
      */
-    private void test(Graph<Integer, DefaultWeightedEdge> graph, Integer source) {
-        ShortestPathAlgorithm.SingleSourcePaths<Integer, DefaultWeightedEdge> dijkstraShortestPaths =
+    private <T> void test(Graph<T, DefaultWeightedEdge> graph, T source) {
+        ShortestPathAlgorithm.SingleSourcePaths<T, DefaultWeightedEdge> dijkstraShortestPaths =
                 new DijkstraShortestPath<>(graph).getPaths(source);
 
-        Pair<Graph<ContractionVertex<Integer>, ContractionHierarchy.ContractionEdge<DefaultWeightedEdge>>,
-                Map<Integer, ContractionVertex<Integer>>> p
+        Pair<Graph<ContractionVertex<T>, ContractionHierarchy.ContractionEdge<DefaultWeightedEdge>>,
+                Map<T, ContractionVertex<T>>> p
                 = new ContractionHierarchy<>(graph, () -> new Random(SEED)).computeContractionHierarchy();
 
-        TransitNodeRouting<Integer, DefaultWeightedEdge> routing = new TransitNodeRoutingPrecomputation<>(
+        TransitNodeRouting<T, DefaultWeightedEdge> routing = new TransitNodeRoutingPrecomputation<>(
                 graph, p.getFirst(), p.getSecond()).computeTransitNodeRouting();
 
-        TransitNodeRoutingShortestPath<Integer, DefaultWeightedEdge> transitNodeRoutingShortestPath
+        TransitNodeRoutingShortestPath<T, DefaultWeightedEdge> transitNodeRoutingShortestPath
                 = new TransitNodeRoutingShortestPath<>(graph, routing);
-        ShortestPathAlgorithm.SingleSourcePaths<Integer, DefaultWeightedEdge> tnrShortestPaths = transitNodeRoutingShortestPath.getPaths(source);
+        ShortestPathAlgorithm.SingleSourcePaths<T, DefaultWeightedEdge> tnrShortestPaths = transitNodeRoutingShortestPath.getPaths(source);
 
 
         assertEqualPaths(dijkstraShortestPaths, tnrShortestPaths, graph.vertexSet());
@@ -203,17 +204,33 @@ public class TransitNodeRoutingShortestPathTest {
      * @param actual    actual paths
      * @param vertexSet vertices
      */
-    private void assertEqualPaths(
-            ShortestPathAlgorithm.SingleSourcePaths<Integer, DefaultWeightedEdge> expected,
-            ShortestPathAlgorithm.SingleSourcePaths<Integer, DefaultWeightedEdge> actual,
-            Set<Integer> vertexSet) {
-        for (Integer sink : vertexSet) {
-            GraphPath<Integer, DefaultWeightedEdge> expectedPath = expected.getPath(sink);
-            GraphPath<Integer, DefaultWeightedEdge> actualPath = actual.getPath(sink);
-//            System.out.println(expectedPath);
-//            System.out.println(actualPath);
-//            System.out.println();
+    private <T> void assertEqualPaths(
+            ShortestPathAlgorithm.SingleSourcePaths<T, DefaultWeightedEdge> expected,
+            ShortestPathAlgorithm.SingleSourcePaths<T, DefaultWeightedEdge> actual,
+            Set<T> vertexSet) {
+        int i = 0;
+        for (T sink : vertexSet) {
+            System.out.println(i++);
+            GraphPath<T, DefaultWeightedEdge> expectedPath = expected.getPath(sink);
+            GraphPath<T, DefaultWeightedEdge> actualPath = actual.getPath(sink);
+            System.out.println(expectedPath);
+            System.out.println(actualPath);
+            System.out.println();
             assertEquals(expectedPath, actualPath);
         }
+    }
+
+    @Test
+    public void testRoadMap() {
+        String path = "/home/semen/drive/osm/final/andorra.txt";
+
+        Graph<ShortestPathPerformance.Node, DefaultWeightedEdge> graph
+                = new SimpleDirectedWeightedGraph<>(DefaultWeightedEdge.class);
+
+        System.out.println("reading graph");
+        OSMReader reader = new OSMReader();
+        reader.readGraph(graph, path, ShortestPathPerformance::greatCircleDistance);
+
+        test(graph, new ShortestPathPerformance.Node(51552736, 1.5137007, 42.546934));
     }
 }
