@@ -11,6 +11,7 @@ import org.jheaps.AddressableHeap;
 import org.jheaps.tree.PairingHeap;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -86,7 +87,7 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         VoronoiDiagramComputation<V, E> voronoiDiagramComputation = new VoronoiDiagramComputation<>(
                 contractionGraph, contractedTransitVertices);
         VoronoiDiagram<V> voronoiDiagram = voronoiDiagramComputation.computeVoronoiDiagram();
-        voronoiDiagramStatistics(voronoiDiagram);
+//        voronoiDiagramStatistics(voronoiDiagram);
 
         ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesPaths
                 = manyToManyShortestPathsAlgorithm.getManyToManyPaths(transitVertices, transitVertices);
@@ -97,8 +98,8 @@ public class TransitNodeRoutingPrecomputation<V, E> {
 
         AccessVertices<V, E> accessVertices = avAndLf.getFirst();
         LocalityFiler<V> localityFiler = avAndLf.getSecond();
-        accessVerticesStatistics(accessVertices);
-        localityFilterStatistics(localityFiler);
+//        accessVerticesStatistics(accessVertices);
+//        localityFilterStatistics(localityFiler);
 
         return new TransitNodeRouting<>(contractionGraph, contractionMapping, contractedTransitVertices,
                 transitVerticesPaths, localityFiler, accessVertices);
@@ -175,6 +176,8 @@ public class TransitNodeRoutingPrecomputation<V, E> {
 
 
     private static class VoronoiDiagramComputation<V, E> {
+        public static final int NO_VORONOI_CELL = -1;
+
         private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
         private Set<ContractionVertex<V>> transitVertices;
 
@@ -182,8 +185,8 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         private AddressableHeap<Double, ContractionVertex<V>> heap;
         private Map<ContractionVertex<V>, AddressableHeap.Handle<Double, ContractionVertex<V>>> seen;
 
-        private List<Integer> voronoiCells;
-        private List<Double> distanceToCenter;
+        private int[] voronoiCells;
+        private double[] distanceToCenter;
 
         VoronoiDiagramComputation(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph, Set<ContractionVertex<V>> transitVertices) {
             this.contractionGraph = contractionGraph;
@@ -193,13 +196,11 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         }
 
         VoronoiDiagram<V> computeVoronoiDiagram() {
-            int numberOfVertices = contractionGraph.vertexSet().size();
-            voronoiCells = new ArrayList<>(numberOfVertices);
-            distanceToCenter = new ArrayList<>(numberOfVertices);
-            for (int i = 0; i < numberOfVertices; ++i) {
-                voronoiCells.add(null);
-                distanceToCenter.add(Double.POSITIVE_INFINITY);
-            }
+            int numOfVertices = contractionGraph.vertexSet().size();
+            voronoiCells = new int[numOfVertices];
+            distanceToCenter = new double[numOfVertices];
+            Arrays.fill(voronoiCells, NO_VORONOI_CELL);
+            Arrays.fill(distanceToCenter, Double.POSITIVE_INFINITY);
 
             Graph<ContractionVertex<V>, ContractionEdge<E>> searchGraph = new EdgeReversedGraph<>(contractionGraph);
 
@@ -217,7 +218,7 @@ public class TransitNodeRoutingPrecomputation<V, E> {
                     ContractionVertex<V> successor = Graphs.getOppositeVertex(searchGraph, edge, v);
 
                     double updatedDistance = distance + searchGraph.getEdgeWeight(edge);
-                    if (updatedDistance < distanceToCenter.get(successor.vertexId)) {
+                    if (updatedDistance < distanceToCenter[successor.vertexId]) {
                         updateDistance(successor, v, updatedDistance);
                     }
                 }
@@ -244,22 +245,22 @@ public class TransitNodeRoutingPrecomputation<V, E> {
             if (vertex.vertexId == parent.vertexId) {
                 updatedVoronoiCell = vertex.vertexId;
             } else {
-                updatedVoronoiCell = this.voronoiCells.get(parent.vertexId);
+                updatedVoronoiCell = this.voronoiCells[parent.vertexId];
             }
-            this.voronoiCells.set(vertex.vertexId, updatedVoronoiCell);
-            this.distanceToCenter.set(vertex.vertexId, distance);
+            this.voronoiCells[vertex.vertexId] = updatedVoronoiCell;
+            this.distanceToCenter[vertex.vertexId] = distance;
         }
     }
 
     private static class VoronoiDiagram<V> {
-        private List<Integer> voronoiCells;
+        private int[] voronoiCells;
 
-        public VoronoiDiagram(List<Integer> voronoiCells) {
+        public VoronoiDiagram(int[] voronoiCells) {
             this.voronoiCells = voronoiCells;
         }
 
         Integer getVoronoiCellId(ContractionVertex<V> vertex) {
-            return voronoiCells.get(vertex.vertexId);
+            return voronoiCells[vertex.vertexId];
         }
     }
 
@@ -384,7 +385,8 @@ public class TransitNodeRoutingPrecomputation<V, E> {
             Set<Integer> sourceVisitedVoronoiCells = visitedForwardVoronoiCells.get(contractedSource.vertexId);
             Set<Integer> sinkVisitedVoronoiCells = visitedBackwardVoronoiCells.get(contractedSink.vertexId);
 
-            if (sourceVisitedVoronoiCells.contains(null) || sinkVisitedVoronoiCells.contains(null)) {
+            if (sourceVisitedVoronoiCells.contains(VoronoiDiagramComputation.NO_VORONOI_CELL)
+                    || sinkVisitedVoronoiCells.contains(VoronoiDiagramComputation.NO_VORONOI_CELL)) {
                 return true;
             }
 
@@ -561,9 +563,9 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         sizes.sort(Integer::compareTo);
         System.out.println("voronoi cells sizes: " + sizes);
 
-        int max = sizes.stream().max(Integer::compareTo).get();
-        int min = sizes.stream().min(Integer::compareTo).get();
-        double avg = sizes.stream().reduce((i1, i2) -> i1 + i2).get() / 149;
+        int max = sizes.stream().max(Integer::compareTo).orElse(Integer.MAX_VALUE);
+        int min = sizes.stream().min(Integer::compareTo).orElse(Integer.MIN_VALUE);
+        double avg = sizes.stream().reduce((i1, i2) -> i1 + i2).orElse(0) / numberOfTransitVertices;
 
         System.out.println("max cell size: " + max);
         System.out.println("min cell size: " + min);
