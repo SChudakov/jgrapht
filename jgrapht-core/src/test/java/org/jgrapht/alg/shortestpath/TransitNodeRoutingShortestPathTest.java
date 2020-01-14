@@ -113,7 +113,7 @@ public class TransitNodeRoutingShortestPathTest {
     public void testOnRandomGraphs() {
         int numOfVertices = 100;
         int vertexDegree = 5;
-        int numOfIterations = 10_000;
+        int numOfIterations = 100;
         int source = 0;
         Random random = new Random(SEED);
         for (int i = 0; i < numOfIterations; ++i) {
@@ -213,9 +213,9 @@ public class TransitNodeRoutingShortestPathTest {
             System.out.println(i++);
             GraphPath<T, DefaultWeightedEdge> expectedPath = expected.getPath(sink);
             GraphPath<T, DefaultWeightedEdge> actualPath = actual.getPath(sink);
-            System.out.println(expectedPath);
-            System.out.println(actualPath);
-            System.out.println();
+//            System.out.println(expectedPath);
+//            System.out.println(actualPath);
+//            System.out.println();
             assertEquals(expectedPath, actualPath);
         }
     }

@@ -79,26 +79,24 @@ public class TransitNodeRoutingPrecomputation<V, E> {
 
     public TransitNodeRouting<V, E> computeTransitNodeRouting() {
         TransitVerticesSelection<V> transitVerticesSelection = new TransitVerticesSelection<>(contractionGraph);
-        Set<V> transitVertices = transitVerticesSelection.getTransitVertices(numberOfTransitVertices);
-        Set<ContractionVertex<V>> contractedTransitVertices = transitVertices.stream()
-                .map(v -> contractionMapping.get(v)).collect(Collectors.toCollection(HashSet::new));
+        Set<ContractionVertex<V>> contractedTransitVertices = transitVerticesSelection.getTransitVertices(numberOfTransitVertices);
+        Set<V> transitVertices = contractedTransitVertices.stream().map(v -> v.vertex)
+                .collect(Collectors.toCollection(HashSet::new));
 
         VoronoiDiagramComputation<V, E> voronoiDiagramComputation = new VoronoiDiagramComputation<>(
                 contractionGraph, contractedTransitVertices);
         VoronoiDiagram<V> voronoiDiagram = voronoiDiagramComputation.computeVoronoiDiagram();
         voronoiDiagramStatistics(voronoiDiagram);
 
-        // TODO: check possibility to compute both packed and unpacked transit nodes by @TransitNodesSelection
-        Set<V> unpackedTransitVertices = contractedTransitVertices.stream().map(v -> v.vertex).collect(Collectors.toCollection(HashSet::new));
-        ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E>
-                transitVerticesPaths = manyToManyShortestPathsAlgorithm.getManyToManyPaths(unpackedTransitVertices, unpackedTransitVertices);
+        ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesPaths
+                = manyToManyShortestPathsAlgorithm.getManyToManyPaths(transitVertices, transitVertices);
 
-        AVAndLFComputation<V, E> AVAndLFComputation = new AVAndLFComputation<>(contractionGraph,
-                contractionMapping, contractedTransitVertices, voronoiDiagram, manyToManyShortestPathsAlgorithm, transitVerticesPaths);
-        Pair<AccessVertices<V, E>, LocalityFiler<V>> p = AVAndLFComputation.computeAVAndLF();
+        AVAndLFComputation<V, E> AVAndLFComputation = new AVAndLFComputation<>(contractionGraph, contractionMapping,
+                contractedTransitVertices, voronoiDiagram, manyToManyShortestPathsAlgorithm, transitVerticesPaths);
+        Pair<AccessVertices<V, E>, LocalityFiler<V>> avAndLf = AVAndLFComputation.computeAVAndLF();
 
-        AccessVertices<V, E> accessVertices = p.getFirst();
-        LocalityFiler<V> localityFiler = p.getSecond();
+        AccessVertices<V, E> accessVertices = avAndLf.getFirst();
+        LocalityFiler<V> localityFiler = avAndLf.getSecond();
         accessVerticesStatistics(accessVertices);
         localityFilterStatistics(localityFiler);
 
@@ -163,12 +161,12 @@ public class TransitNodeRoutingPrecomputation<V, E> {
             this.contractionGraph = contractionGraph;
         }
 
-        public Set<V> getTransitVertices(int numOfTransitVertices) {
+        public Set<ContractionVertex<V>> getTransitVertices(int numOfTransitVertices) {
             int numOfVertices = contractionGraph.vertexSet().size();
-            Set<V> result = new HashSet<>();
+            Set<ContractionVertex<V>> result = new HashSet<>(numOfTransitVertices);
             for (ContractionVertex<V> vertex : contractionGraph.vertexSet()) {
                 if (vertex.contractionLevel >= numOfVertices - numOfTransitVertices) {
-                    result.add(vertex.vertex);
+                    result.add(vertex);
                 }
             }
             return result;
@@ -296,22 +294,22 @@ public class TransitNodeRoutingPrecomputation<V, E> {
             AccessVerticesBuilder<V, E> accessVerticesBuilder = new AccessVerticesBuilder<>(
                     manyToManyShortestPathsAlgorithm, transitVerticesPaths, contractionGraph.vertexSet().size());
 
-            CoveringSearch<V, E> forwardSearch = new CoveringSearch<>(new MaskSubgraph<>(contractionGraph,
+            ContractionHierarchyBFS<V, E> forwardBFS = new ContractionHierarchyBFS<>(new MaskSubgraph<>(contractionGraph,
                     v -> false, e -> !e.isUpward), transitVertices, voronoiDiagram);
-            CoveringSearch<V, E> backwardSearch = new CoveringSearch<>(new MaskSubgraph<>(new EdgeReversedGraph<>(
+            ContractionHierarchyBFS<V, E> backwardBFS = new ContractionHierarchyBFS<>(new MaskSubgraph<>(new EdgeReversedGraph<>(
                     contractionGraph), v -> false, e -> e.isUpward), transitVertices, voronoiDiagram);
 
 //            int vertex = 0;
             for (ContractionVertex<V> v : contractionGraph.vertexSet()) {
 //                System.out.println(++vertex);
-                Pair<Set<ContractionVertex<V>>, Set<Integer>> forwardSearchData = forwardSearch.runSearch(v);
-                Pair<Set<ContractionVertex<V>>, Set<Integer>> backwardSearchData = backwardSearch.runSearch(v);
+                Pair<Set<V>, Set<Integer>> forwardData = forwardBFS.runSearch(v);
+                Pair<Set<V>, Set<Integer>> backwardData = backwardBFS.runSearch(v);
 
-                accessVerticesBuilder.addForwardAccessVertices(v, forwardSearchData.getFirst());
-                accessVerticesBuilder.addBackwardAccessVertices(v, backwardSearchData.getFirst());
+                accessVerticesBuilder.addForwardAccessVertices(v, forwardData.getFirst());
+                accessVerticesBuilder.addBackwardAccessVertices(v, backwardData.getFirst());
 
-                localityFilterBuilder.addForwardVisitedVoronoiCells(v, forwardSearchData.getSecond());
-                localityFilterBuilder.addBackwardVisitedVoronoiCells(v, backwardSearchData.getSecond());
+                localityFilterBuilder.addForwardVisitedVoronoiCells(v, forwardData.getSecond());
+                localityFilterBuilder.addBackwardVisitedVoronoiCells(v, backwardData.getSecond());
             }
 
             return Pair.of(accessVerticesBuilder.buildVertices(),
@@ -319,24 +317,23 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         }
     }
 
-    // TODO: find better name to address access vertices and locality filter
-    private static class CoveringSearch<V, E> {
+    private static class ContractionHierarchyBFS<V, E> {
         private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
 
         private Set<ContractionVertex<V>> transitVertices;
         private VoronoiDiagram<V> voronoiDiagram;
 
-        public CoveringSearch(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
-                              Set<ContractionVertex<V>> transitVertices,
-                              VoronoiDiagram<V> voronoiDiagram) {
+        public ContractionHierarchyBFS(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                                       Set<ContractionVertex<V>> transitVertices,
+                                       VoronoiDiagram<V> voronoiDiagram) {
             this.contractionGraph = contractionGraph;
 
             this.transitVertices = transitVertices;
             this.voronoiDiagram = voronoiDiagram;
         }
 
-        public Pair<Set<ContractionVertex<V>>, Set<Integer>> runSearch(ContractionVertex<V> vertex) {
-            Set<ContractionVertex<V>> accessVertices = new HashSet<>();
+        public Pair<Set<V>, Set<Integer>> runSearch(ContractionVertex<V> vertex) {
+            Set<V> accessVertices = new HashSet<>();
             Set<Integer> visitedVoronoiCells = new HashSet<>();
 
             Set<Integer> visitedVerticesIds = new HashSet<>();
@@ -348,7 +345,7 @@ public class TransitNodeRoutingPrecomputation<V, E> {
                 visitedVerticesIds.add(v.vertexId);
 
                 if (transitVertices.contains(v)) {
-                    accessVertices.add(v);
+                    accessVertices.add(v.vertex);
                 } else {
                     visitedVoronoiCells.add(voronoiDiagram.getVoronoiCellId(v));
 
@@ -494,15 +491,13 @@ public class TransitNodeRoutingPrecomputation<V, E> {
             return new AccessVertices<>(forwardAccessVertices, backwardAccessVertices);
         }
 
-        public void addForwardAccessVertices(ContractionVertex<V> v, Set<ContractionVertex<V>> vertices) {
-            // TODO: avoid mapping vertices by extracting a dedicated method in @CHManyToManyShortestPaths
-            Set<V> unpackedVertices = vertices.stream().map(av -> av.vertex).collect(Collectors.toCollection(HashSet::new));
+        public void addForwardAccessVertices(ContractionVertex<V> v, Set<V> vertices) {
             ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> manyToManyShortestPaths
-                    = manyToManyShortestPathsAlgorithm.getManyToManyPaths(Collections.singleton(v.vertex), unpackedVertices);
+                    = manyToManyShortestPathsAlgorithm.getManyToManyPaths(Collections.singleton(v.vertex), vertices);
 
-            Set<V> prunedVertices = getPrunedAccessVertices(v.vertex, unpackedVertices, manyToManyShortestPaths, true);
+            Set<V> prunedVertices = getPrunedAccessVertices(v.vertex, vertices, manyToManyShortestPaths, true);
             List<AccessVertex<V, E>> accessVerticesList = forwardAccessVertices.get(v.vertexId);
-            for (V unpackedVertex : unpackedVertices) {
+            for (V unpackedVertex : vertices) {
                 if (!prunedVertices.contains(unpackedVertex)) {
                     accessVerticesList.add(new AccessVertex<>(unpackedVertex, manyToManyShortestPaths.getPath(v.vertex, unpackedVertex)));
                 }
@@ -510,15 +505,13 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         }
 
 
-        public void addBackwardAccessVertices(ContractionVertex<V> v, Set<ContractionVertex<V>> vertices) {
-            // TODO: avoid mapping vertices by extracting a dedicated method in @CHManyToManyShortestPaths
-            Set<V> unpackedVertices = vertices.stream().map(av -> av.vertex).collect(Collectors.toCollection(HashSet::new));
+        public void addBackwardAccessVertices(ContractionVertex<V> v, Set<V> vertices) {
             ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> manyToManyShortestPaths
-                    = manyToManyShortestPathsAlgorithm.getManyToManyPaths(unpackedVertices, Collections.singleton(v.vertex));
+                    = manyToManyShortestPathsAlgorithm.getManyToManyPaths(vertices, Collections.singleton(v.vertex));
 
-            Set<V> prunedVertices = getPrunedAccessVertices(v.vertex, unpackedVertices, manyToManyShortestPaths, false);
+            Set<V> prunedVertices = getPrunedAccessVertices(v.vertex, vertices, manyToManyShortestPaths, false);
             List<AccessVertex<V, E>> accessVerticesList = backwardAccessVertices.get(v.vertexId);
-            for (V unpackedVertex : unpackedVertices) {
+            for (V unpackedVertex : vertices) {
                 if (!prunedVertices.contains(unpackedVertex)) {
                     accessVerticesList.add(new AccessVertex<>(unpackedVertex, manyToManyShortestPaths.getPath(unpackedVertex, v.vertex)));
                 }

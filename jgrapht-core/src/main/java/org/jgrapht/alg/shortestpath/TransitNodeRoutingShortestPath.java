@@ -7,6 +7,7 @@ import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
 import org.jgrapht.graph.GraphWalk;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -88,29 +89,40 @@ public class TransitNodeRoutingShortestPath<V, E> extends BaseShortestPathAlgori
         }
     }
 
-    private GraphPath<V, E> combinePaths(GraphPath<V, E> p1, GraphPath<V, E> p2, GraphPath<V, E> p3) {
-        V startVertex = p1.getStartVertex();
-        V endVertex = p3.getEndVertex();
-        double totalWeight = p1.getWeight() + p2.getWeight() + p3.getWeight();
+    private GraphPath<V, E> combinePaths(GraphPath<V, E> first, GraphPath<V, E> second, GraphPath<V, E> third) {
+        V startVertex = first.getStartVertex();
+        V endVertex = third.getEndVertex();
+        double totalWeight = first.getWeight() + second.getWeight() + third.getWeight();
 
-        List<V> vertexList = new ArrayList<>();
-        List<E> edgeList = new ArrayList<>(p1.getLength() + p2.getLength() + p3.getLength());
+        int vertexListSize = first.getVertexList().size() + second.getVertexList().size() + third.getVertexList().size() - 2;
+        List<V> vertexList = new ArrayList<>(vertexListSize);
+        int edgeListSize = first.getLength() + second.getLength() + third.getLength();
+        List<E> edgeList = new ArrayList<>(edgeListSize);
+
+        int transitVerticesPathLength = second.getEdgeList().size();
+        System.out.println("transit vertices length: " + transitVerticesPathLength);
+        System.out.println("total path length: " + edgeListSize);
+        System.out.println("ratio: " + (double) transitVerticesPathLength / edgeListSize);
 
         // form vertex list
-        List<V> p1VertexList = p1.getVertexList();
-        for (int i = 0; i < p1VertexList.size() - 1; ++i) {
-            vertexList.add(p1VertexList.get(i));
+        Iterator<V> firstIt = first.getVertexList().iterator();
+        while (firstIt.hasNext()) {
+            V element = firstIt.next();
+            if (firstIt.hasNext()) {
+                vertexList.add(element);
+            }
         }
-        vertexList.addAll(p2.getVertexList());
-        List<V> p3VertexList = p3.getVertexList();
-        for (int i = 1; i < p3VertexList.size(); ++i) {
-            vertexList.add(p3VertexList.get(i));
+        vertexList.addAll(second.getVertexList());
+        Iterator<V> thirdIt = third.getVertexList().iterator();
+        thirdIt.next();
+        while (thirdIt.hasNext()) {
+            vertexList.add(thirdIt.next());
         }
 
         // form edge list
-        edgeList.addAll(p1.getEdgeList());
-        edgeList.addAll(p2.getEdgeList());
-        edgeList.addAll(p3.getEdgeList());
+        edgeList.addAll(first.getEdgeList());
+        edgeList.addAll(second.getEdgeList());
+        edgeList.addAll(third.getEdgeList());
 
         return new GraphWalk<>(graph, startVertex, endVertex, vertexList, edgeList, totalWeight);
     }
