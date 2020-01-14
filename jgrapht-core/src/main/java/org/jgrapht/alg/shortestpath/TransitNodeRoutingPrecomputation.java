@@ -39,12 +39,6 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         init(graph, p.getFirst(), p.getSecond(), Math.max(1, (int) Math.sqrt(graph.vertexSet().size())));
     }
 
-    public TransitNodeRoutingPrecomputation(Graph<V, E> graph, TransitVerticesSelection<V> transitVerticesSelection) {
-        Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>, Map<V, ContractionVertex<V>>> p
-                = new ContractionHierarchy<>(graph).computeContractionHierarchy();
-        init(graph, p.getFirst(), p.getSecond(), Math.max(1, (int) Math.sqrt(graph.vertexSet().size())));
-    }
-
     public TransitNodeRoutingPrecomputation(Graph<V, E> graph,
                                             Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
                                             Map<V, ContractionVertex<V>> contractionMapping) {
@@ -57,12 +51,6 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         init(graph, contractionGraph, contractionMapping, numberOfTransitVertices);
     }
 
-    public TransitNodeRoutingPrecomputation(Graph<V, E> graph,
-                                            Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
-                                            Map<V, ContractionVertex<V>> contractionMapping, int numberOfTransitVertices,
-                                            TransitVerticesSelection<V> transitVerticesSelection) {
-        init(graph, contractionGraph, contractionMapping, numberOfTransitVertices);
-    }
 
     private void init(Graph<V, E> graph,
                       Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
