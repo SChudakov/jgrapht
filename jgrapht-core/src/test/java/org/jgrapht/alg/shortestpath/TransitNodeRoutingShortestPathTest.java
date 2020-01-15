@@ -208,9 +208,9 @@ public class TransitNodeRoutingShortestPathTest {
             ShortestPathAlgorithm.SingleSourcePaths<T, DefaultWeightedEdge> expected,
             ShortestPathAlgorithm.SingleSourcePaths<T, DefaultWeightedEdge> actual,
             Set<T> vertexSet) {
-        int i = 0;
+//        int i = 0;
         for (T sink : vertexSet) {
-            System.out.println(i++);
+//            System.out.println(i++);
             GraphPath<T, DefaultWeightedEdge> expectedPath = expected.getPath(sink);
             GraphPath<T, DefaultWeightedEdge> actualPath = actual.getPath(sink);
 //            System.out.println(expectedPath);

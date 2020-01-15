@@ -20,6 +20,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.jgrapht.alg.shortestpath.ContractionHierarchy.ContractionEdge;
@@ -30,29 +35,63 @@ public class TransitNodeRoutingPrecomputation<V, E> {
     private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
     private Map<V, ContractionVertex<V>> contractionMapping;
     private int numberOfTransitVertices;
+    private int parallelism;
 
+    private List<ContractionVertex<V>> contractionVertices;
     private ManyToManyShortestPathsAlgorithm<V, E> manyToManyShortestPathsAlgorithm;
+
+    /**
+     * Executor to which contraction tasks are submitted.
+     */
+    private ExecutorService executor;
+    /**
+     * Decorator for {@code executor} that enables to keep track of when all submitted tasks are
+     * finished.
+     */
+    private ExecutorCompletionService<Void> completionService;
+
 
     public TransitNodeRoutingPrecomputation(Graph<V, E> graph) {
         Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>, Map<V, ContractionVertex<V>>> p
                 = new ContractionHierarchy<>(graph).computeContractionHierarchy();
-        init(graph, p.getFirst(), p.getSecond(), Math.max(1, (int) Math.sqrt(graph.vertexSet().size())));
+        init(graph, Runtime.getRuntime().availableProcessors(), p.getFirst(), p.getSecond(),
+                Math.max(1, (int) Math.sqrt(graph.vertexSet().size())));
+    }
+
+    public TransitNodeRoutingPrecomputation(Graph<V, E> graph, int parallelism) {
+        Pair<Graph<ContractionVertex<V>, ContractionEdge<E>>, Map<V, ContractionVertex<V>>> p
+                = new ContractionHierarchy<>(graph).computeContractionHierarchy();
+        init(graph, parallelism, p.getFirst(), p.getSecond(), Math.max(1, (int) Math.sqrt(graph.vertexSet().size())));
     }
 
     public TransitNodeRoutingPrecomputation(Graph<V, E> graph,
                                             Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
                                             Map<V, ContractionVertex<V>> contractionMapping) {
-        init(graph, contractionGraph, contractionMapping, (int) Math.sqrt(graph.vertexSet().size()));
+        init(graph, Runtime.getRuntime().availableProcessors(), contractionGraph, contractionMapping,
+                (int) Math.sqrt(graph.vertexSet().size()));
+    }
+
+    public TransitNodeRoutingPrecomputation(Graph<V, E> graph, int parallelism,
+                                            Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                                            Map<V, ContractionVertex<V>> contractionMapping) {
+        init(graph, parallelism, contractionGraph, contractionMapping, (int) Math.sqrt(graph.vertexSet().size()));
     }
 
     public TransitNodeRoutingPrecomputation(Graph<V, E> graph,
                                             Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
                                             Map<V, ContractionVertex<V>> contractionMapping, int numberOfTransitVertices) {
-        init(graph, contractionGraph, contractionMapping, numberOfTransitVertices);
+        init(graph, Runtime.getRuntime().availableProcessors(), contractionGraph,
+                contractionMapping, numberOfTransitVertices);
+    }
+
+    public TransitNodeRoutingPrecomputation(Graph<V, E> graph, int parallelism,
+                                            Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
+                                            Map<V, ContractionVertex<V>> contractionMapping, int numberOfTransitVertices) {
+        init(graph, parallelism, contractionGraph, contractionMapping, numberOfTransitVertices);
     }
 
 
-    private void init(Graph<V, E> graph,
+    private void init(Graph<V, E> graph, int parallelism,
                       Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
                       Map<V, ContractionVertex<V>> contractionMapping, int numberOfTransitVertices) {
         if (numberOfTransitVertices > graph.vertexSet().size()) {
@@ -61,13 +100,21 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         this.contractionGraph = contractionGraph;
         this.contractionMapping = contractionMapping;
         this.numberOfTransitVertices = numberOfTransitVertices;
+        this.parallelism = parallelism;
+
+        this.contractionVertices = new ArrayList<>(contractionGraph.vertexSet().size());
         this.manyToManyShortestPathsAlgorithm = new CHManyToManyShortestPaths<>(graph, contractionGraph, contractionMapping);
-        System.out.println("number of transit vertices: " + numberOfTransitVertices);
+
+        this.executor = Executors.newFixedThreadPool(parallelism);
+        this.completionService = new ExecutorCompletionService<>(executor);
+//        System.out.println("number of transit vertices: " + numberOfTransitVertices);
     }
 
 
     public TransitNodeRouting<V, E> computeTransitNodeRouting() {
-        TransitVerticesSelection<V> transitVerticesSelection = new TransitVerticesSelection<>(contractionGraph);
+        fillContractionVerticesList();
+
+        TopKTransitVerticesSelection<V> transitVerticesSelection = new TopKTransitVerticesSelection<>(contractionGraph);
         Set<ContractionVertex<V>> contractedTransitVertices = transitVerticesSelection.getTransitVertices(numberOfTransitVertices);
         Set<V> transitVertices = contractedTransitVertices.stream().map(v -> v.vertex)
                 .collect(Collectors.toCollection(HashSet::new));
@@ -80,8 +127,8 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesPaths
                 = manyToManyShortestPathsAlgorithm.getManyToManyPaths(transitVertices, transitVertices);
 
-        AVAndLFComputation<V, E> AVAndLFComputation = new AVAndLFComputation<>(contractionGraph, contractionMapping,
-                contractedTransitVertices, voronoiDiagram, manyToManyShortestPathsAlgorithm, transitVerticesPaths);
+        AVAndLFComputation AVAndLFComputation = new AVAndLFComputation(
+                contractedTransitVertices, voronoiDiagram, transitVerticesPaths);
         Pair<AccessVertices<V, E>, LocalityFiler<V>> avAndLf = AVAndLFComputation.computeAVAndLF();
 
         AccessVertices<V, E> accessVertices = avAndLf.getFirst();
@@ -91,6 +138,16 @@ public class TransitNodeRoutingPrecomputation<V, E> {
 
         return new TransitNodeRouting<>(contractionGraph, contractionMapping, contractedTransitVertices,
                 transitVerticesPaths, localityFiler, accessVertices);
+    }
+
+    private void fillContractionVerticesList() {
+        int numOfVertices = contractionGraph.vertexSet().size();
+        for (int i = 0; i < numOfVertices; ++i) {
+            contractionVertices.add(null);
+        }
+        for (ContractionVertex<V> v : contractionGraph.vertexSet()) {
+            contractionVertices.set(v.vertexId, v);
+        }
     }
 
 
@@ -143,10 +200,10 @@ public class TransitNodeRoutingPrecomputation<V, E> {
     }
 
 
-    private class TransitVerticesSelection<V> {
+    private class TopKTransitVerticesSelection<V> {
         private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
 
-        TransitVerticesSelection(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph) {
+        TopKTransitVerticesSelection(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph) {
             this.contractionGraph = contractionGraph;
         }
 
@@ -253,26 +310,16 @@ public class TransitNodeRoutingPrecomputation<V, E> {
     }
 
 
-    private static class AVAndLFComputation<V, E> {
-        private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
-        private Map<V, ContractionVertex<V>> contractionMapping;
-
+    private class AVAndLFComputation {
         private Set<ContractionVertex<V>> transitVertices;
         private VoronoiDiagram<V> voronoiDiagram;
-        private ManyToManyShortestPathsAlgorithm<V, E> manyToManyShortestPathsAlgorithm;
         private ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesPaths;
 
-        public AVAndLFComputation(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph,
-                                  Map<V, ContractionVertex<V>> contractionMapping,
-                                  Set<ContractionVertex<V>> transitVertices,
+        public AVAndLFComputation(Set<ContractionVertex<V>> transitVertices,
                                   VoronoiDiagram<V> voronoiDiagram,
-                                  ManyToManyShortestPathsAlgorithm<V, E> manyToManyShortestPathsAlgorithm,
                                   ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesPaths) {
-            this.contractionGraph = contractionGraph;
-            this.contractionMapping = contractionMapping;
             this.transitVertices = transitVertices;
             this.voronoiDiagram = voronoiDiagram;
-            this.manyToManyShortestPathsAlgorithm = manyToManyShortestPathsAlgorithm;
             this.transitVerticesPaths = transitVerticesPaths;
         }
 
@@ -288,23 +335,39 @@ public class TransitNodeRoutingPrecomputation<V, E> {
             ContractionHierarchyBFS<V, E> backwardBFS = new ContractionHierarchyBFS<>(new MaskSubgraph<>(new EdgeReversedGraph<>(
                     contractionGraph), v -> false, e -> e.isUpward), transitVertices, voronoiDiagram);
 
-//            int vertex = 0;
-            for (ContractionVertex<V> v : contractionGraph.vertexSet()) {
-//                System.out.println(++vertex);
-                Pair<Set<V>, Set<Integer>> forwardData = forwardBFS.runSearch(v);
-                Pair<Set<V>, Set<Integer>> backwardData = backwardBFS.runSearch(v);
-
-                accessVerticesBuilder.addForwardAccessVertices(v, forwardData.getFirst());
-                accessVerticesBuilder.addBackwardAccessVertices(v, backwardData.getFirst());
-
-                localityFilterBuilder.addForwardVisitedVoronoiCells(v, forwardData.getSecond());
-                localityFilterBuilder.addBackwardVisitedVoronoiCells(v, backwardData.getSecond());
+            for (int threadId = 0; threadId < parallelism; ++threadId) {
+                AVAndLFConstructionTask task = new AVAndLFConstructionTask(
+                        threadId, 0, contractionVertices.size(),
+                        localityFilterBuilder, accessVerticesBuilder, forwardBFS, backwardBFS);
+                completionService.submit(task, null);
             }
+            waitForTasksCompletion(parallelism);
+            shutdownExecutor();
 
             return Pair.of(accessVerticesBuilder.buildVertices(),
                     localityFilterBuilder.buildLocalityFilter(contractionMapping));
         }
+
+        private void waitForTasksCompletion(int numOfTasks) {
+            for (int i = 0; i < numOfTasks; ++i) {
+                try {
+                    completionService.take().get();
+                } catch (InterruptedException | ExecutionException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        private void shutdownExecutor() {
+            executor.shutdown();
+            try {
+                executor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
     }
+
 
     private static class ContractionHierarchyBFS<V, E> {
         private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
@@ -316,7 +379,6 @@ public class TransitNodeRoutingPrecomputation<V, E> {
                                        Set<ContractionVertex<V>> transitVertices,
                                        VoronoiDiagram<V> voronoiDiagram) {
             this.contractionGraph = contractionGraph;
-
             this.transitVertices = transitVertices;
             this.voronoiDiagram = voronoiDiagram;
         }
@@ -535,6 +597,82 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         }
     }
 
+
+    private class AVAndLFConstructionTask implements Runnable {
+        /**
+         * Id of this task.
+         */
+        int taskId;
+        /**
+         * Start if the working segment in {@code vertices} inclusively.
+         */
+        int segmentStart;
+        /**
+         * End if the working segment in {@code vertices} exclusively.
+         */
+        int segmentsEnd;
+
+        LocalityFilterBuilder<V> localityFilterBuilder;
+        AccessVerticesBuilder<V, E> accessVerticesBuilder;
+        ContractionHierarchyBFS<V, E> forwardBFS;
+        ContractionHierarchyBFS<V, E> backwardBFS;
+
+        public AVAndLFConstructionTask(int taskId, int segmentStart, int segmentsEnd,
+                                       LocalityFilterBuilder<V> localityFilterBuilder,
+                                       AccessVerticesBuilder<V, E> accessVerticesBuilder,
+                                       ContractionHierarchyBFS<V, E> forwardBFS,
+                                       ContractionHierarchyBFS<V, E> backwardBFS) {
+            this.taskId = taskId;
+            this.segmentStart = segmentStart;
+            this.segmentsEnd = segmentsEnd;
+            this.localityFilterBuilder = localityFilterBuilder;
+            this.accessVerticesBuilder = accessVerticesBuilder;
+            this.forwardBFS = forwardBFS;
+            this.backwardBFS = backwardBFS;
+        }
+
+        @Override
+        public void run() {
+            int start = workerSegmentStart(segmentStart, segmentsEnd);
+            int end = workerSegmentEnd(segmentStart, segmentsEnd);
+            for (int i = start; i < end; ++i) {
+                ContractionVertex<V> v = contractionVertices.get(i);
+
+                Pair<Set<V>, Set<Integer>> forwardData = forwardBFS.runSearch(v);
+                Pair<Set<V>, Set<Integer>> backwardData = backwardBFS.runSearch(v);
+
+                accessVerticesBuilder.addForwardAccessVertices(v, forwardData.getFirst());
+                accessVerticesBuilder.addBackwardAccessVertices(v, backwardData.getFirst());
+
+                localityFilterBuilder.addForwardVisitedVoronoiCells(v, forwardData.getSecond());
+                localityFilterBuilder.addBackwardVisitedVoronoiCells(v, backwardData.getSecond());
+            }
+        }
+
+        /**
+         * Computes start of the working chunk for this task.
+         *
+         * @param segmentStart working segment start
+         * @param segmentEnd   working segment end
+         * @return working chunk start
+         */
+        private int workerSegmentStart(int segmentStart, int segmentEnd) {
+            return segmentStart + ((segmentEnd - segmentStart) * taskId) / parallelism;
+        }
+
+        /**
+         * Computes end of the working chunk for this task.
+         *
+         * @param segmentStart working segment start
+         * @param segmentEnd   working segment end
+         * @return working chunk end
+         */
+        private int workerSegmentEnd(int segmentStart, int segmentEnd) {
+            return segmentStart + ((segmentEnd - segmentStart) * (taskId + 1)) / parallelism;
+        }
+    }
+
+
     private void voronoiDiagramStatistics(VoronoiDiagram<V> voronoiDiagram) {
         Map<Integer, Integer> counts = new HashMap<>();
 
@@ -561,24 +699,22 @@ public class TransitNodeRoutingPrecomputation<V, E> {
     }
 
     private void accessVerticesStatistics(AccessVertices<V, E> accessVertices) {
-        List<Integer> forwardAccessVerticesSizes = accessVertices.forwardAccessVertices.stream().map(av -> av.size()).collect(Collectors.toList());
-        forwardAccessVerticesSizes.sort(Integer::compareTo);
+        List<Integer> forwardAccessVerticesSizes = accessVertices.forwardAccessVertices.stream().map(List::size).sorted(Integer::compareTo).collect(Collectors.toList());
         System.out.println("forward access vertices sizes: " + forwardAccessVerticesSizes);
 
-        int forwardMax = forwardAccessVerticesSizes.stream().max(Integer::compareTo).get();
-        int forwardMin = forwardAccessVerticesSizes.stream().min(Integer::compareTo).get();
-        double forwardAvg = forwardAccessVerticesSizes.stream().reduce((i1, i2) -> i1 + i2).get() / (double) contractionGraph.vertexSet().size();
+        int forwardMax = forwardAccessVerticesSizes.stream().max(Integer::compareTo).orElse(Integer.MAX_VALUE);
+        int forwardMin = forwardAccessVerticesSizes.stream().min(Integer::compareTo).orElse(Integer.MIN_VALUE);
+        double forwardAvg = forwardAccessVerticesSizes.stream().reduce((i1, i2) -> i1 + i2).orElse(0) / (double) contractionGraph.vertexSet().size();
 
         System.out.println("max forward access vertices size: " + forwardMax);
         System.out.println("min forward access vertices size: " + forwardMin);
         System.out.println("avg forward access vertices size: " + forwardAvg);
 
-        List<Integer> backwardAccessVerticesSizes = accessVertices.backwardAccessVertices.stream().map(av -> av.size()).collect(Collectors.toList());
-        backwardAccessVerticesSizes.sort(Integer::compareTo);
+        List<Integer> backwardAccessVerticesSizes = accessVertices.backwardAccessVertices.stream().map(List::size).sorted(Integer::compareTo).collect(Collectors.toList());
         System.out.println("backward access vertices sizes: " + forwardAccessVerticesSizes);
-        int backwardMax = backwardAccessVerticesSizes.stream().max(Integer::compareTo).get();
-        int backwardMin = backwardAccessVerticesSizes.stream().min(Integer::compareTo).get();
-        double backwardAvg = backwardAccessVerticesSizes.stream().reduce((i1, i2) -> i1 + i2).get() / (double) contractionGraph.vertexSet().size();
+        int backwardMax = backwardAccessVerticesSizes.stream().max(Integer::compareTo).orElse(Integer.MAX_VALUE);
+        int backwardMin = backwardAccessVerticesSizes.stream().min(Integer::compareTo).orElse(Integer.MIN_VALUE);
+        double backwardAvg = backwardAccessVerticesSizes.stream().reduce((i1, i2) -> i1 + i2).orElse(0) / (double) contractionGraph.vertexSet().size();
 
         System.out.println("max backward access vertices size: " + backwardMax);
         System.out.println("min backward access vertices size: " + backwardMin);
@@ -586,23 +722,21 @@ public class TransitNodeRoutingPrecomputation<V, E> {
     }
 
     private void localityFilterStatistics(LocalityFiler<V> localityFiler) {
-        List<Integer> forwardVisitedVoronoiCells = localityFiler.visitedForwardVoronoiCells.stream().map(av -> av.size()).collect(Collectors.toList());
-        forwardVisitedVoronoiCells.sort(Integer::compareTo);
+        List<Integer> forwardVisitedVoronoiCells = localityFiler.visitedForwardVoronoiCells.stream().map(Set::size).sorted(Integer::compareTo).collect(Collectors.toList());
         System.out.println("forward visited voronoi cells: " + forwardVisitedVoronoiCells);
-        int forwardMax = forwardVisitedVoronoiCells.stream().max(Integer::compareTo).get();
-        int forwardMin = forwardVisitedVoronoiCells.stream().min(Integer::compareTo).get();
-        double forwardAvg = forwardVisitedVoronoiCells.stream().reduce((i1, i2) -> i1 + i2).get() / (double) contractionGraph.vertexSet().size();
+        int forwardMax = forwardVisitedVoronoiCells.stream().max(Integer::compareTo).orElse(Integer.MAX_VALUE);
+        int forwardMin = forwardVisitedVoronoiCells.stream().min(Integer::compareTo).orElse(Integer.MIN_VALUE);
+        double forwardAvg = forwardVisitedVoronoiCells.stream().reduce((i1, i2) -> i1 + i2).orElse(0) / (double) contractionGraph.vertexSet().size();
 
         System.out.println("max forward visited voronoi cells size: " + forwardMax);
         System.out.println("min forward visited voronoi cells size: " + forwardMin);
         System.out.println("avg forward visited voronoi cells size: " + forwardAvg);
 
-        List<Integer> backwardVisitedVoronoiCells = localityFiler.visitedBackwardVoronoiCells.stream().map(av -> av.size()).collect(Collectors.toList());
-        backwardVisitedVoronoiCells.sort(Integer::compareTo);
+        List<Integer> backwardVisitedVoronoiCells = localityFiler.visitedBackwardVoronoiCells.stream().map(Set::size).sorted(Integer::compareTo).collect(Collectors.toList());
         System.out.println("backward visited voronoi cells sizes: " + backwardVisitedVoronoiCells);
-        int backwardMax = backwardVisitedVoronoiCells.stream().max(Integer::compareTo).get();
-        int backwardMin = backwardVisitedVoronoiCells.stream().min(Integer::compareTo).get();
-        double backwardAvg = backwardVisitedVoronoiCells.stream().reduce((i1, i2) -> i1 + i2).get() / (double) contractionGraph.vertexSet().size();
+        int backwardMax = backwardVisitedVoronoiCells.stream().max(Integer::compareTo).orElse(Integer.MAX_VALUE);
+        int backwardMin = backwardVisitedVoronoiCells.stream().min(Integer::compareTo).orElse(Integer.MIN_VALUE);
+        double backwardAvg = backwardVisitedVoronoiCells.stream().reduce((i1, i2) -> i1 + i2).orElse(0) / (double) contractionGraph.vertexSet().size();
 
         System.out.println("max forward visited voronoi cells size: " + backwardMax);
         System.out.println("min forward visited voronoi cells size: " + backwardMin);

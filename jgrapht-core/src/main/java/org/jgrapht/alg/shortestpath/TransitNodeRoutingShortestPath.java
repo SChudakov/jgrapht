@@ -100,9 +100,9 @@ public class TransitNodeRoutingShortestPath<V, E> extends BaseShortestPathAlgori
         List<E> edgeList = new ArrayList<>(edgeListSize);
 
         int transitVerticesPathLength = second.getEdgeList().size();
-        System.out.println("transit vertices length: " + transitVerticesPathLength);
-        System.out.println("total path length: " + edgeListSize);
-        System.out.println("ratio: " + (double) transitVerticesPathLength / edgeListSize);
+//        System.out.println("transit vertices length: " + transitVerticesPathLength);
+//        System.out.println("total path length: " + edgeListSize);
+//        System.out.println("ratio: " + (double) transitVerticesPathLength / edgeListSize);
 
         // form vertex list
         Iterator<V> firstIt = first.getVertexList().iterator();

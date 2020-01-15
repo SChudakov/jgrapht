@@ -173,7 +173,8 @@ public class TransitNodeRoutingPrecomputationTest {
             System.out.println(i);
             Graph<Integer, DefaultWeightedEdge> graph =
                     generateRandomGraph(numOfVertices, vertexDegree * numOfVertices, random);
-            TransitNodeRoutingPrecomputation<Integer, DefaultWeightedEdge> routing = new TransitNodeRoutingPrecomputation<>(graph);
+            TransitNodeRoutingPrecomputation<Integer, DefaultWeightedEdge> routing
+                    = new TransitNodeRoutingPrecomputation<>(graph);
             routing.computeTransitNodeRouting();
         }
     }
