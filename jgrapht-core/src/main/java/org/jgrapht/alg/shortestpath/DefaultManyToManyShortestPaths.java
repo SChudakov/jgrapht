@@ -94,7 +94,7 @@ public class DefaultManyToManyShortestPaths<V, E> extends BaseManyToManyShortest
      * {@link org.jgrapht.alg.interfaces.ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths}.
      * For each pair of source and target vertices stores a corresponding path between them.
      */
-    private class DefaultManyToManyShortestPathsImpl extends BaseManyToManyShortestPathsImpl<V, E> {
+    static class DefaultManyToManyShortestPathsImpl<V, E> extends BaseManyToManyShortestPathsImpl<V, E> {
 
         /**
          * Map from source vertices to corresponding single source shortest path trees.
