@@ -168,18 +168,49 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BaseShortes
      */
     @Override
     public GraphPath<V, E> getPath(V source, V sink) {
-        if (!graph.containsVertex(source)) {
-            throw new IllegalArgumentException(GRAPH_MUST_CONTAIN_THE_SOURCE_VERTEX);
-        }
-        if (!graph.containsVertex(sink)) {
-            throw new IllegalArgumentException(GRAPH_MUST_CONTAIN_THE_SINK_VERTEX);
-        }
+        assertCorrectSourceAndSink(source, sink);
 
         // handle special case if source equals target
         if (source.equals(sink)) {
             return createEmptyPath(source, sink);
         }
 
+        CHSearchResult result = search(source, sink);
+
+        // create path if found
+        if (Double.isFinite(result.weight) && result.weight <= radius) {
+            return createPath(result.forwardFrontier, result.backwardFrontier,
+                    result.weight, result.source, result.commonVertex, result.sink);
+        } else {
+            return createEmptyPath(source, sink);
+        }
+    }
+
+    @Override
+    public double getPathWeight(V source, V sink) {
+        assertCorrectSourceAndSink(source, sink);
+
+        // handle special case if source equals target
+        if (source.equals(sink)) {
+            return 0.0;
+        }
+
+        CHSearchResult result = search(source, sink);
+
+        return result.weight;
+    }
+
+
+    private void assertCorrectSourceAndSink(V source, V sink) {
+        if (!graph.containsVertex(source)) {
+            throw new IllegalArgumentException(GRAPH_MUST_CONTAIN_THE_SOURCE_VERTEX);
+        }
+        if (!graph.containsVertex(sink)) {
+            throw new IllegalArgumentException(GRAPH_MUST_CONTAIN_THE_SINK_VERTEX);
+        }
+    }
+
+    private CHSearchResult search(V source, V sink) {
         ContractionVertex<V> contractedSource = contractionMapping.get(source);
         ContractionVertex<V> contractedSink = contractionMapping.get(sink);
 
@@ -255,12 +286,28 @@ public class ContractionHierarchyBidirectionalDijkstra<V, E> extends BaseShortes
             }
         }
 
-        // create path if found
-        if (Double.isFinite(bestPath) && bestPath <= radius) {
-            return createPath(forwardFrontier, backwardFrontier,
-                    bestPath, contractedSource, bestPathCommonVertex, contractedSink);
-        } else {
-            return createEmptyPath(source, sink);
+        return new CHSearchResult(forwardFrontier, backwardFrontier, bestPath,
+                contractedSource, bestPathCommonVertex, contractedSink);
+    }
+
+    private class CHSearchResult {
+        ContractionSearchFrontier<ContractionVertex<V>, ContractionEdge<E>> forwardFrontier;
+        ContractionSearchFrontier<ContractionVertex<V>, ContractionEdge<E>> backwardFrontier;
+        double weight;
+        ContractionVertex<V> source;
+        ContractionVertex<V> commonVertex;
+        ContractionVertex<V> sink;
+
+        public CHSearchResult(ContractionSearchFrontier<ContractionVertex<V>, ContractionEdge<E>> forwardFrontier,
+                              ContractionSearchFrontier<ContractionVertex<V>, ContractionEdge<E>> backwardFrontier,
+                              double weight, ContractionVertex<V> source, ContractionVertex<V> commonVertex,
+                              ContractionVertex<V> sink) {
+            this.forwardFrontier = forwardFrontier;
+            this.backwardFrontier = backwardFrontier;
+            this.weight = weight;
+            this.source = source;
+            this.commonVertex = commonVertex;
+            this.sink = sink;
         }
     }
 

@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
@@ -27,6 +28,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static org.jgrapht.alg.interfaces.ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths;
 import static org.jgrapht.alg.shortestpath.ContractionHierarchy.ContractionEdge;
 import static org.jgrapht.alg.shortestpath.ContractionHierarchy.ContractionVertex;
 
@@ -114,30 +116,30 @@ public class TransitNodeRoutingPrecomputation<V, E> {
     public TransitNodeRouting<V, E> computeTransitNodeRouting() {
         fillContractionVerticesList();
 
-        TopKTransitVerticesSelection<V> transitVerticesSelection = new TopKTransitVerticesSelection<>(contractionGraph);
-        Set<ContractionVertex<V>> contractedTransitVertices = transitVerticesSelection.getTransitVertices(numberOfTransitVertices);
-        Set<V> transitVertices = contractedTransitVertices.stream().map(v -> v.vertex)
-                .collect(Collectors.toCollection(HashSet::new));
+        TopKTransitVerticesSelection transitVerticesSelection = new TopKTransitVerticesSelection(contractionGraph);
+        Set<ContractionVertex<V>> contractedTransitVerticesSet = transitVerticesSelection.getTransitVertices(numberOfTransitVertices);
+        Set<V> transitVerticesSet = contractedTransitVerticesSet.stream().map(v -> v.vertex).collect(Collectors.toCollection(HashSet::new));
+        List<V> transitVerticesList = new ArrayList<>(transitVerticesSet);
 
-        VoronoiDiagramComputation<V, E> voronoiDiagramComputation = new VoronoiDiagramComputation<>(
-                contractionGraph, contractedTransitVertices);
+
+        VoronoiDiagramComputation<V, E> voronoiDiagramComputation = new VoronoiDiagramComputation<>(contractionGraph, contractedTransitVerticesSet);
         VoronoiDiagram<V> voronoiDiagram = voronoiDiagramComputation.computeVoronoiDiagram();
 //        voronoiDiagramStatistics(voronoiDiagram);
 
-        ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesPaths
-                = manyToManyShortestPathsAlgorithm.getManyToManyPaths(transitVertices, transitVertices);
+        ManyToManyShortestPaths<V, E> chPaths = manyToManyShortestPathsAlgorithm.getManyToManyPaths(transitVerticesSet, transitVerticesSet);
+        ManyToManyShortestPaths<V, E> unpackedPath = unpackPaths(chPaths, transitVerticesSet, transitVerticesList);
 
-        AVAndLFComputation AVAndLFComputation = new AVAndLFComputation(
-                contractedTransitVertices, voronoiDiagram, transitVerticesPaths);
+        AVAndLFComputation AVAndLFComputation = new AVAndLFComputation(contractedTransitVerticesSet, voronoiDiagram, unpackedPath);
         Pair<AccessVertices<V, E>, LocalityFiler<V>> avAndLf = AVAndLFComputation.computeAVAndLF();
+        shutdownExecutor();
 
         AccessVertices<V, E> accessVertices = avAndLf.getFirst();
         LocalityFiler<V> localityFiler = avAndLf.getSecond();
 //        accessVerticesStatistics(accessVertices);
 //        localityFilterStatistics(localityFiler);
 
-        return new TransitNodeRouting<>(contractionGraph, contractionMapping, contractedTransitVertices,
-                transitVerticesPaths, localityFiler, accessVertices);
+        return new TransitNodeRouting<>(contractionGraph, contractionMapping, contractedTransitVerticesSet,
+                unpackedPath, localityFiler, accessVertices);
     }
 
     private void fillContractionVerticesList() {
@@ -147,6 +149,39 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         }
         for (ContractionVertex<V> v : contractionGraph.vertexSet()) {
             contractionVertices.set(v.vertexId, v);
+        }
+    }
+
+    private ManyToManyShortestPaths<V, E> unpackPaths(ManyToManyShortestPaths<V, E> shortestPaths,
+                                                      Set<V> transitVerticesSet,
+                                                      List<V> transitVerticesList) {
+        Map<Pair<V, V>, GraphPath<V, E>> pathsMap = new ConcurrentHashMap<>(numberOfTransitVertices * numberOfTransitVertices);
+
+        for (int taskId = 0; taskId < parallelism; ++taskId) {
+            PathsUnpackingTask task = new PathsUnpackingTask(taskId, transitVerticesList, pathsMap, shortestPaths);
+            completionService.submit(task, null);
+        }
+        waitForTasksCompletion(parallelism);
+
+        return new DefaultManyToManyShortestPaths.DefaultManyToManyShortestPathsImpl<>(transitVerticesSet, transitVerticesSet, pathsMap);
+    }
+
+    private void waitForTasksCompletion(int numOfTasks) {
+        for (int i = 0; i < numOfTasks; ++i) {
+            try {
+                completionService.take().get();
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void shutdownExecutor() {
+        executor.shutdown();
+        try {
+            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 
@@ -200,7 +235,7 @@ public class TransitNodeRoutingPrecomputation<V, E> {
     }
 
 
-    private class TopKTransitVerticesSelection<V> {
+    private class TopKTransitVerticesSelection {
         private Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph;
 
         TopKTransitVerticesSelection(Graph<ContractionVertex<V>, ContractionEdge<E>> contractionGraph) {
@@ -336,35 +371,14 @@ public class TransitNodeRoutingPrecomputation<V, E> {
                     contractionGraph), v -> false, e -> e.isUpward), transitVertices, voronoiDiagram);
 
             for (int threadId = 0; threadId < parallelism; ++threadId) {
-                AVAndLFConstructionTask task = new AVAndLFConstructionTask(
-                        threadId, 0, contractionVertices.size(),
-                        localityFilterBuilder, accessVerticesBuilder, forwardBFS, backwardBFS);
+                AVAndLFConstructionTask task = new AVAndLFConstructionTask(threadId, localityFilterBuilder,
+                        accessVerticesBuilder, forwardBFS, backwardBFS);
                 completionService.submit(task, null);
             }
             waitForTasksCompletion(parallelism);
-            shutdownExecutor();
 
             return Pair.of(accessVerticesBuilder.buildVertices(),
                     localityFilterBuilder.buildLocalityFilter(contractionMapping));
-        }
-
-        private void waitForTasksCompletion(int numOfTasks) {
-            for (int i = 0; i < numOfTasks; ++i) {
-                try {
-                    completionService.take().get();
-                } catch (InterruptedException | ExecutionException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        private void shutdownExecutor() {
-            executor.shutdown();
-            try {
-                executor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
         }
     }
 
@@ -519,7 +533,7 @@ public class TransitNodeRoutingPrecomputation<V, E> {
 
     private static class AccessVerticesBuilder<V, E> {
         private ManyToManyShortestPathsAlgorithm<V, E> manyToManyShortestPathsAlgorithm;
-        private ManyToManyShortestPathsAlgorithm.ManyToManyShortestPaths<V, E> transitVerticesDistances;
+        private ManyToManyShortestPaths<V, E> transitVerticesDistances;
 
         private List<List<AccessVertex<V, E>>> forwardAccessVertices;
         private List<List<AccessVertex<V, E>>> backwardAccessVertices;
@@ -571,8 +585,9 @@ public class TransitNodeRoutingPrecomputation<V, E> {
         }
 
 
-        private Set<V> getPrunedAccessVertices(V v, Set<V> vertices, ManyToManyShortestPathsAlgorithm
-                .ManyToManyShortestPaths<V, E> manyToManyShortestPaths, boolean forwardAccessVertices) {
+        private Set<V> getPrunedAccessVertices(V v, Set<V> vertices,
+                                               ManyToManyShortestPaths<V, E> manyToManyShortestPaths,
+                                               boolean forwardAccessVertices) {
             Set<V> result = new HashSet<>();
             for (V v1 : vertices) {
                 if (!result.contains(v1)) {
@@ -603,28 +618,17 @@ public class TransitNodeRoutingPrecomputation<V, E> {
          * Id of this task.
          */
         int taskId;
-        /**
-         * Start if the working segment in {@code vertices} inclusively.
-         */
-        int segmentStart;
-        /**
-         * End if the working segment in {@code vertices} exclusively.
-         */
-        int segmentsEnd;
 
         LocalityFilterBuilder<V> localityFilterBuilder;
         AccessVerticesBuilder<V, E> accessVerticesBuilder;
         ContractionHierarchyBFS<V, E> forwardBFS;
         ContractionHierarchyBFS<V, E> backwardBFS;
 
-        public AVAndLFConstructionTask(int taskId, int segmentStart, int segmentsEnd,
-                                       LocalityFilterBuilder<V> localityFilterBuilder,
+        public AVAndLFConstructionTask(int taskId, LocalityFilterBuilder<V> localityFilterBuilder,
                                        AccessVerticesBuilder<V, E> accessVerticesBuilder,
                                        ContractionHierarchyBFS<V, E> forwardBFS,
                                        ContractionHierarchyBFS<V, E> backwardBFS) {
             this.taskId = taskId;
-            this.segmentStart = segmentStart;
-            this.segmentsEnd = segmentsEnd;
             this.localityFilterBuilder = localityFilterBuilder;
             this.accessVerticesBuilder = accessVerticesBuilder;
             this.forwardBFS = forwardBFS;
@@ -633,9 +637,13 @@ public class TransitNodeRoutingPrecomputation<V, E> {
 
         @Override
         public void run() {
-            int start = workerSegmentStart(segmentStart, segmentsEnd);
-            int end = workerSegmentEnd(segmentStart, segmentsEnd);
+            int start = workerSegmentStart(0, contractionVertices.size(), taskId);
+            int end = workerSegmentEnd(0, contractionVertices.size(), taskId);
+            System.out.println("thread " + taskId + " : " + start + " " + end + " - " + (end - start + 1) + " vertices");
             for (int i = start; i < end; ++i) {
+                if ((i - start) != 0 && (i - start) % 100 == 0) {
+                    System.out.println("thread " + taskId + " " + (i - start) + "/" + (end - start + 1));
+                }
                 ContractionVertex<V> v = contractionVertices.get(i);
 
                 Pair<Set<V>, Set<Integer>> forwardData = forwardBFS.runSearch(v);
@@ -649,29 +657,62 @@ public class TransitNodeRoutingPrecomputation<V, E> {
             }
         }
 
+    }
+
+    private class PathsUnpackingTask implements Runnable {
         /**
-         * Computes start of the working chunk for this task.
-         *
-         * @param segmentStart working segment start
-         * @param segmentEnd   working segment end
-         * @return working chunk start
+         * Id of this task.
          */
-        private int workerSegmentStart(int segmentStart, int segmentEnd) {
-            return segmentStart + ((segmentEnd - segmentStart) * taskId) / parallelism;
+        int taskId;
+
+        List<V> transitVertices;
+        Map<Pair<V, V>, GraphPath<V, E>> pathsMap;
+        ManyToManyShortestPaths<V, E> shortestPaths;
+
+        public PathsUnpackingTask(int taskId, List<V> transitVertices,
+                                  Map<Pair<V, V>, GraphPath<V, E>> pathsMap,
+                                  ManyToManyShortestPaths<V, E> shortestPaths) {
+            this.taskId = taskId;
+            this.transitVertices = transitVertices;
+            this.pathsMap = pathsMap;
+            this.shortestPaths = shortestPaths;
         }
 
-        /**
-         * Computes end of the working chunk for this task.
-         *
-         * @param segmentStart working segment start
-         * @param segmentEnd   working segment end
-         * @return working chunk end
-         */
-        private int workerSegmentEnd(int segmentStart, int segmentEnd) {
-            return segmentStart + ((segmentEnd - segmentStart) * (taskId + 1)) / parallelism;
+        @Override
+        public void run() {
+            int start = workerSegmentStart(0, transitVertices.size(), taskId);
+            int end = workerSegmentEnd(0, transitVertices.size(), taskId);
+
+            for (int i = start; i < end; ++i) {
+                V v1 = transitVertices.get(i);
+                for (V v2 : transitVertices) {
+                    pathsMap.put(Pair.of(v1, v2), shortestPaths.getPath(v1, v2));
+                }
+            }
         }
     }
 
+    /**
+     * Computes start of the working chunk for this task.
+     *
+     * @param segmentStart working segment start
+     * @param segmentEnd   working segment end
+     * @return working chunk start
+     */
+    private int workerSegmentStart(int segmentStart, int segmentEnd, int taskId) {
+        return segmentStart + ((segmentEnd - segmentStart) * taskId) / parallelism;
+    }
+
+    /**
+     * Computes end of the working chunk for this task.
+     *
+     * @param segmentStart working segment start
+     * @param segmentEnd   working segment end
+     * @return working chunk end
+     */
+    private int workerSegmentEnd(int segmentStart, int segmentEnd, int taskId) {
+        return segmentStart + ((segmentEnd - segmentStart) * (taskId + 1)) / parallelism;
+    }
 
     private void voronoiDiagramStatistics(VoronoiDiagram<V> voronoiDiagram) {
         Map<Integer, Integer> counts = new HashMap<>();

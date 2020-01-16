@@ -103,8 +103,8 @@ public class TransitNodeRoutingPrecomputationTest {
                 = new ContractionHierarchy<>(graph, () -> new Random(SEED)).computeContractionHierarchy();
 
         // computation
-        TransitNodeRoutingPrecomputation<Integer, DefaultWeightedEdge> precomputation = new TransitNodeRoutingPrecomputation<>(
-                graph, p.getFirst(), p.getSecond(), 1);
+        TransitNodeRoutingPrecomputation<Integer, DefaultWeightedEdge> precomputation =
+                new TransitNodeRoutingPrecomputation<>(graph, 1, p.getFirst(), p.getSecond(), 1);
         TransitNodeRouting<Integer, DefaultWeightedEdge> routing = precomputation.computeTransitNodeRouting();
 
         Map<Integer, ContractionVertex<Integer>> contractionMapping = routing.getContractionMapping();

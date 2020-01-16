@@ -4,6 +4,7 @@ import org.jgrapht.Graph;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.ManyToManyShortestPathsAlgorithm;
 import org.jgrapht.alg.interfaces.ShortestPathAlgorithm;
+import org.jgrapht.alg.util.Pair;
 import org.jgrapht.graph.GraphWalk;
 
 import java.util.ArrayList;
@@ -59,27 +60,11 @@ public class TransitNodeRoutingShortestPath<V, E> extends BaseShortestPathAlgori
             ++isLocalCount;
             return localQueriesAlgorithm.getPath(source, sink);
         } else {
-            ContractionVertex<V> contractedSource = contractionMapping.get(source);
-            ContractionVertex<V> contractedSink = contractionMapping.get(sink);
+            Pair<AccessVertex<V, E>, AccessVertex<V, E>> p = getMinWeightAccessVertices(source, sink);
+            AccessVertex<V, E> forwardAccessVertex = p.getFirst();
+            AccessVertex<V, E> backwardAccessVertex = p.getSecond();
 
-            AccessVertex<V, E> forwardAccessVertex = null;
-            AccessVertex<V, E> backwardAccessVertex = null;
-            double minimumWeight = Double.POSITIVE_INFINITY;
-
-            for (AccessVertex<V, E> sourceAccessVertex : accessVertices.getForwardAccessVertices(contractedSource)) {
-                for (AccessVertex<V, E> sinkAccessVertex : accessVertices.getBackwardAccessVertices(contractedSink)) {
-                    double currentWeight = sourceAccessVertex.path.getWeight() +
-                            manyToManyShortestPaths.getWeight(sourceAccessVertex.vertex, sinkAccessVertex.vertex) +
-                            sinkAccessVertex.path.getWeight();
-                    if (currentWeight < minimumWeight) {
-                        minimumWeight = currentWeight;
-                        forwardAccessVertex = sourceAccessVertex;
-                        backwardAccessVertex = sinkAccessVertex;
-                    }
-                }
-            }
-
-            if (minimumWeight == Double.POSITIVE_INFINITY) {
+            if (forwardAccessVertex == null) {
                 return createEmptyPath(source, sink);
             }
 
@@ -87,6 +72,49 @@ public class TransitNodeRoutingShortestPath<V, E> extends BaseShortestPathAlgori
                     manyToManyShortestPaths.getPath(forwardAccessVertex.vertex, backwardAccessVertex.vertex),
                     backwardAccessVertex.path);
         }
+    }
+
+    @Override
+    public double getPathWeight(V source, V sink) {
+        if (localityFiler.isLocal(source, sink)) {
+            ++isLocalCount;
+            return localQueriesAlgorithm.getPathWeight(source, sink);
+        } else {
+            Pair<AccessVertex<V, E>, AccessVertex<V, E>> p = getMinWeightAccessVertices(source, sink);
+            AccessVertex<V, E> forwardAccessVertex = p.getFirst();
+            AccessVertex<V, E> backwardAccessVertex = p.getSecond();
+            return forwardAccessVertex.path.getWeight() +
+                    manyToManyShortestPaths.getWeight(forwardAccessVertex.vertex, backwardAccessVertex.vertex) +
+                    backwardAccessVertex.path.getWeight();
+        }
+    }
+
+    private Pair<AccessVertex<V, E>, AccessVertex<V, E>> getMinWeightAccessVertices(V source, V sink) {
+        ContractionVertex<V> contractedSource = contractionMapping.get(source);
+        ContractionVertex<V> contractedSink = contractionMapping.get(sink);
+
+        AccessVertex<V, E> forwardAccessVertex = null;
+        AccessVertex<V, E> backwardAccessVertex = null;
+        double minimumWeight = Double.POSITIVE_INFINITY;
+
+        for (AccessVertex<V, E> sourceAccessVertex : accessVertices.getForwardAccessVertices(contractedSource)) {
+            for (AccessVertex<V, E> sinkAccessVertex : accessVertices.getBackwardAccessVertices(contractedSink)) {
+                double currentWeight = sourceAccessVertex.path.getWeight() +
+                        manyToManyShortestPaths.getWeight(sourceAccessVertex.vertex, sinkAccessVertex.vertex) +
+                        sinkAccessVertex.path.getWeight();
+                if (currentWeight < minimumWeight) {
+                    minimumWeight = currentWeight;
+                    forwardAccessVertex = sourceAccessVertex;
+                    backwardAccessVertex = sinkAccessVertex;
+                }
+            }
+        }
+
+        if (minimumWeight == Double.POSITIVE_INFINITY) {
+            return new Pair<>(null, null);
+        }
+
+        return Pair.of(forwardAccessVertex, backwardAccessVertex);
     }
 
     private GraphPath<V, E> combinePaths(GraphPath<V, E> first, GraphPath<V, E> second, GraphPath<V, E> third) {
@@ -99,7 +127,7 @@ public class TransitNodeRoutingShortestPath<V, E> extends BaseShortestPathAlgori
         int edgeListSize = first.getLength() + second.getLength() + third.getLength();
         List<E> edgeList = new ArrayList<>(edgeListSize);
 
-        int transitVerticesPathLength = second.getEdgeList().size();
+//        int transitVerticesPathLength = second.getEdgeList().size();
 //        System.out.println("transit vertices length: " + transitVerticesPathLength);
 //        System.out.println("total path length: " + edgeListSize);
 //        System.out.println("ratio: " + (double) transitVerticesPathLength / edgeListSize);
@@ -126,4 +154,5 @@ public class TransitNodeRoutingShortestPath<V, E> extends BaseShortestPathAlgori
 
         return new GraphWalk<>(graph, startVertex, endVertex, vertexList, edgeList, totalWeight);
     }
+
 }
