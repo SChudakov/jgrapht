@@ -72,7 +72,6 @@ public class HowardMinimumMeanCycle<V, E> implements MinimumCycleMeanAlgorithm<V
         return cycle.getWeight() / cycle.getLength();
     }
 
-
     private Map<V, E> processStronglyConnectedComponent(Graph<V, E> scc) {
         // build policy graph
         Pair<Map<V, Double>, Map<V, E>> p = buildPolicyGraph(scc);
