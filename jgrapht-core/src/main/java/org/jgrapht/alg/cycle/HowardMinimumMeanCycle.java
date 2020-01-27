@@ -6,6 +6,7 @@ import org.jgrapht.Graphs;
 import org.jgrapht.alg.connectivity.GabowStrongConnectivityInspector;
 import org.jgrapht.alg.interfaces.MinimumCycleMeanAlgorithm;
 import org.jgrapht.alg.interfaces.StrongConnectivityAlgorithm;
+import org.jgrapht.alg.util.ToleranceDoubleComparator;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.GraphWalk;
 import org.jgrapht.util.CollectionUtil;
@@ -19,6 +20,7 @@ public class HowardMinimumMeanCycle<V, E> implements MinimumCycleMeanAlgorithm<V
     private final Graph<V, E> graph;
     private final StrongConnectivityAlgorithm<V, E> strongConnectivityAlgorithm;
     private final int maximumIterations;
+    private final ToleranceDoubleComparator comparator;
 
     boolean _curr_found;
     double _curr_cost;
@@ -43,14 +45,15 @@ public class HowardMinimumMeanCycle<V, E> implements MinimumCycleMeanAlgorithm<V
     List<V> _queue;
 
     public HowardMinimumMeanCycle(Graph<V, E> graph) {
-        this(graph, new GabowStrongConnectivityInspector<>(graph), Integer.MAX_VALUE);
+        this(graph, new GabowStrongConnectivityInspector<>(graph), Integer.MAX_VALUE, 1e-9);
     }
 
     public HowardMinimumMeanCycle(Graph<V, E> graph, StrongConnectivityAlgorithm<V, E> strongConnectivityAlgorithm,
-                                  int maximumIterations) {
+                                  int maximumIterations, double toleranceEpsilon) {
         this.graph = graph;
         this.strongConnectivityAlgorithm = strongConnectivityAlgorithm;
         this.maximumIterations = maximumIterations;
+        this.comparator = new ToleranceDoubleComparator(toleranceEpsilon);
 
         this._policy = CollectionUtil.newHashMapWithExpectedSize(graph.vertexSet().size());
         this._reached = CollectionUtil.newHashMapWithExpectedSize(graph.vertexSet().size());
@@ -79,11 +82,9 @@ public class HowardMinimumMeanCycle<V, E> implements MinimumCycleMeanAlgorithm<V
     @Override
     public GraphPath<V, E> getCycle() {
         int terminationCause = findCycleMean();
-        if (terminationCause == 0) {        // no path
+        if (terminationCause == 0) {                                // no path
             return null;
-        } else if (terminationCause == 1) { // iterations limit
-            return buildPath();
-        } else if (terminationCause == 2) { // optimal
+        } else if (terminationCause == 1 || terminationCause == 2) { // iterations limit or optimal solution
             return buildPath();
         }
         return null;
@@ -249,7 +250,7 @@ public class HowardMinimumMeanCycle<V, E> implements MinimumCycleMeanAlgorithm<V
 
                 double delta = _dist.get(v) + scc.getEdgeWeight(e) * _curr_size - _curr_cost;
 
-                if (delta < _dist.get(u)) {
+                if (comparator.compare(delta, _dist.get(u)) < 0) {
                     _dist.put(u, delta);
                     _policy.put(u, e);
                     improved = true;
