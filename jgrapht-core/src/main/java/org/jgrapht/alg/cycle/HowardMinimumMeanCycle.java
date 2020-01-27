@@ -3,9 +3,10 @@ package org.jgrapht.alg.cycle;
 import org.jgrapht.Graph;
 import org.jgrapht.GraphPath;
 import org.jgrapht.Graphs;
+import org.jgrapht.alg.connectivity.GabowStrongConnectivityInspector;
 import org.jgrapht.alg.interfaces.MinimumCycleMeanAlgorithm;
 import org.jgrapht.alg.interfaces.StrongConnectivityAlgorithm;
-import org.jgrapht.alg.util.Pair;
+import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.GraphWalk;
 import org.jgrapht.util.CollectionUtil;
 
@@ -29,40 +30,43 @@ public class HowardMinimumMeanCycle<V, E> implements MinimumCycleMeanAlgorithm<V
     int _best_size;
     V _best_node;
 
-    Map<V, E> _best_policy;
+    GraphPath<Integer, DefaultWeightedEdge> _cycle_path;
+    boolean _local_path;
+
+    Map<V, E> _policy;
+    Map<V, Boolean> _reached;
+    Map<V, Integer> _level;
+    Map<V, Double> _dist;
 
     int _qback;
     int _qfront;
     List<V> _queue;
 
-    public HowardMinimumMeanCycle(Graph<V, E> graph, StrongConnectivityAlgorithm<V, E> strongConnectivityAlgorithm, int maximumIterations) {
+    public HowardMinimumMeanCycle(Graph<V, E> graph) {
+        this(graph, new GabowStrongConnectivityInspector<>(graph), Integer.MAX_VALUE);
+    }
+
+    public HowardMinimumMeanCycle(Graph<V, E> graph, StrongConnectivityAlgorithm<V, E> strongConnectivityAlgorithm,
+                                  int maximumIterations) {
         this.graph = graph;
         this.strongConnectivityAlgorithm = strongConnectivityAlgorithm;
         this.maximumIterations = maximumIterations;
+
+        this._policy = CollectionUtil.newHashMapWithExpectedSize(graph.vertexSet().size());
+        this._reached = CollectionUtil.newHashMapWithExpectedSize(graph.vertexSet().size());
+        this._level = CollectionUtil.newHashMapWithExpectedSize(graph.vertexSet().size());
+        this._dist = CollectionUtil.newHashMapWithExpectedSize(graph.vertexSet().size());
+
         this._queue = new ArrayList<>(Collections.nCopies(graph.vertexSet().size(), null));
+        this._best_found = false;
+        this._best_cost = 0;
+        this._best_size = 1;
+        this._cycle_path = null;
     }
 
     @Override
     public double getCycleMean() {
         return getMean(getCycle());
-    }
-
-    @Override
-    public GraphPath<V, E> getCycle() {
-        for (Graph<V, E> scc : strongConnectivityAlgorithm.getStronglyConnectedComponents()) {
-            Map<V, E> _policy = processStronglyConnectedComponent(scc);
-
-            // Update the best cycle
-            if (_curr_found && (!_best_found || _curr_cost * _best_size < _best_cost * _curr_size)) {
-                _best_found = true;
-                _best_cost = _curr_cost;
-                _best_size = _curr_size;
-                _best_node = _curr_node;
-                _best_policy = _policy;
-            }
-        }
-
-        return buildPath();
     }
 
     private double getMean(GraphPath<V, E> cycle) {
@@ -72,29 +76,72 @@ public class HowardMinimumMeanCycle<V, E> implements MinimumCycleMeanAlgorithm<V
         return cycle.getWeight() / cycle.getLength();
     }
 
-    private Map<V, E> processStronglyConnectedComponent(Graph<V, E> scc) {
-        // build policy graph
-        Pair<Map<V, Double>, Map<V, E>> p = buildPolicyGraph(scc);
-        Map<V, Double> _dist = p.getFirst();
-        Map<V, E> _policy = p.getSecond();
-
-
-        boolean improved = true;
-        for (int i = 0; i < maximumIterations && improved; ++i) {
-            // find policy cycle
-            findPolicyCycle(scc, _policy);
-
-            // compute node distance
-            improved = computeNodeDistance(scc, _dist, _policy);
+    @Override
+    public GraphPath<V, E> getCycle() {
+        int terminationCause = findCycleMean();
+        if (terminationCause == 0) {        // no path
+            return null;
+        } else if (terminationCause == 1) { // iterations limit
+            return buildPath();
+        } else if (terminationCause == 2) { // optimal
+            return buildPath();
         }
-
-        return _policy;
+        return null;
     }
 
-    private Pair<Map<V, Double>, Map<V, E>> buildPolicyGraph(Graph<V, E> scc) {
-        int numberOfVertices = scc.vertexSet().size();
-        Map<V, Double> _dist = CollectionUtil.newHashMapWithExpectedSize(numberOfVertices);
-        Map<V, E> _policy = CollectionUtil.newHashMapWithExpectedSize(numberOfVertices);
+    private int findCycleMean() {
+        int numberOfIterations = 0;
+        boolean iterationsLimitReached = false;
+        for (Graph<V, E> scc : strongConnectivityAlgorithm.getStronglyConnectedComponents()) {
+            // build policy graph
+            if (!buildPolicyGraph(scc)) {
+                continue;
+            }
+
+            while (true) {
+                if (++numberOfIterations > maximumIterations) {
+                    iterationsLimitReached = true;
+                    break;
+                }
+                // find policy cycle
+                findPolicyCycle(scc, _policy);
+
+                // compute node distance
+                if (!computeNodeDistance(scc)) {
+                    break;
+                }
+            }
+
+            // Update the best cycle
+            if (_curr_found && (!_best_found || _curr_cost * _best_size < _best_cost * _curr_size)) {
+                _best_found = true;
+                _best_cost = _curr_cost;
+                _best_size = _curr_size;
+                _best_node = _curr_node;
+            }
+
+            if (iterationsLimitReached) {
+                break;
+            }
+        }
+
+        if (iterationsLimitReached) {
+            return 1;
+        } else {
+            if (_best_found) {
+                return 2;
+            } else {
+                return 0;
+            }
+        }
+    }
+
+
+    private boolean buildPolicyGraph(Graph<V, E> scc) {
+        if (scc.vertexSet().size() == 0 ||
+                scc.vertexSet().size() == 1 && scc.incomingEdgesOf(new ArrayList<>(scc.vertexSet()).get(0)).size() == 0) {
+            return false;
+        }
 
         for (V v : scc.vertexSet()) {
             _dist.put(v, Double.POSITIVE_INFINITY);
@@ -103,6 +150,7 @@ public class HowardMinimumMeanCycle<V, E> implements MinimumCycleMeanAlgorithm<V
         for (V v : scc.vertexSet()) {
             for (E e : scc.incomingEdgesOf(v)) {
                 V u = Graphs.getOppositeVertex(scc, e, v);
+
                 double eWeight = scc.getEdgeWeight(e);
                 if (eWeight < _dist.get(u)) {
                     _dist.put(u, eWeight);
@@ -111,19 +159,16 @@ public class HowardMinimumMeanCycle<V, E> implements MinimumCycleMeanAlgorithm<V
             }
         }
 
-        return Pair.of(_dist, _policy);
+        return true;
     }
 
     private void findPolicyCycle(Graph<V, E> scc, Map<V, E> _policy) {
-        int numberOfVertices = scc.vertexSet().size();
-        Map<V, Integer> _level = CollectionUtil.newHashMapWithExpectedSize(numberOfVertices);
         for (V v : scc.vertexSet()) {
             _level.put(v, -1);
         }
 
         double ccost;
         int csize;
-
         _curr_found = false;
         int i = 0;
         for (V u : scc.vertexSet()) {
@@ -156,11 +201,8 @@ public class HowardMinimumMeanCycle<V, E> implements MinimumCycleMeanAlgorithm<V
         }
     }
 
-    private boolean computeNodeDistance(Graph<V, E> scc, Map<V, Double> _dist, Map<V, E> _policy) {
-        int numberOfVertices = scc.vertexSet().size();
-
+    private boolean computeNodeDistance(Graph<V, E> scc) {
         // Find the component of the main cycle and compute node distances using reverse BFS
-        Map<V, Boolean> _reached = CollectionUtil.newHashMapWithExpectedSize(numberOfVertices);
         for (V v : scc.vertexSet()) {
             _reached.put(v, false);
         }
@@ -172,22 +214,20 @@ public class HowardMinimumMeanCycle<V, E> implements MinimumCycleMeanAlgorithm<V
         _dist.put(_curr_node, 0.0);
 
         while (_qfront <= _qback) {
-            V v = _queue.get(_qfront);
-            ++_qfront;
+            V v = _queue.get(_qfront++);
             for (E e : scc.incomingEdgesOf(v)) {
                 V u = Graphs.getOppositeVertex(scc, e, v);
                 if (_policy.get(u).equals(e) && !_reached.get(u)) {
                     _reached.put(u, true);
                     _dist.put(u, _dist.get(v) + scc.getEdgeWeight(e) * _curr_size - _curr_cost);
-                    ++_qback;
-                    _queue.set(_qback, u);
+                    _queue.set(++_qback, u);
                 }
             }
         }
 
         // Connect all other nodes to this component and compute node distances using reverse BFS
         _qfront = 0;
-        while (_qback < numberOfVertices - 1) {
+        while (_qback < scc.vertexSet().size() - 1) {
             V v = _queue.get(_qfront++);
             for (E e : scc.incomingEdgesOf(v)) {
                 V u = Graphs.getOppositeVertex(scc, e, v);
@@ -206,6 +246,7 @@ public class HowardMinimumMeanCycle<V, E> implements MinimumCycleMeanAlgorithm<V
         for (V v : scc.vertexSet()) {
             for (E e : scc.incomingEdgesOf(v)) {
                 V u = Graphs.getOppositeVertex(scc, e, v);
+
                 double delta = _dist.get(v) + scc.getEdgeWeight(e) * _curr_size - _curr_cost;
 
                 if (delta < _dist.get(u)) {
@@ -228,7 +269,7 @@ public class HowardMinimumMeanCycle<V, E> implements MinimumCycleMeanAlgorithm<V
         V v = _best_node;
         pathVertices.add(_best_node);
         do {
-            E e = _best_policy.get(v);
+            E e = _policy.get(v);
             v = Graphs.getOppositeVertex(graph, e, v);
 
             pathEdges.add(e);
