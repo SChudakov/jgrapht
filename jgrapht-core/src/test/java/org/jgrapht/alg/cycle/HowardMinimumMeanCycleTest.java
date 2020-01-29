@@ -1,3 +1,20 @@
+/*
+ * (C) Copyright 2020-2020, by Semen Chudakov and Contributors.
+ *
+ * JGraphT : a free Java graph-theory library
+ *
+ * See the CONTRIBUTORS.md file distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0, or the
+ * GNU Lesser General Public License v2.1 or later
+ * which is available at
+ * http://www.gnu.org/licenses/old-licenses/lgpl-2.1-standalone.html.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR LGPL-2.1-or-later
+ */
 package org.jgrapht.alg.cycle;
 
 import org.jgrapht.Graph;
@@ -13,8 +30,12 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
+/**
+ * Test for {@link HowardMinimumMeanCycle}.
+ */
 public class HowardMinimumMeanCycleTest {
 
+    // test graph instances
     private double[][] graph1 = {{1, 3, 7.0}, {3, 2, 3.0}, {2, 0, 7.0}, {2, 1, 5.0}};
     private double[][] graph2 = {{1, 0, 0.5309808994022128}, {2, 0, 0.887369465477802}, {0, 3, 0.24854619550940948},
             {5, 0, 0.7862072932065413}, {0, 6, 0.6597510963121964}, {8, 0, 0.3093510947826138},
@@ -93,6 +114,7 @@ public class HowardMinimumMeanCycleTest {
             {10, 12, 0.9753568298497903}, {12, 10, 0.9463531873675847}, {11, 11, 0.18121082129435206},
             {12, 14, 0.020812929131225788}};
 
+    // expected mean values
     private double expectedMean1 = 5.0;
     private double expectedMean2 = 0.090372357737592113;
     private double expectedMean3 = 0.074285947345551759;
@@ -100,54 +122,62 @@ public class HowardMinimumMeanCycleTest {
     private double expectedMean5 = 0.067734720032592399;
     private double expectedMean6 = 0.14838114112973164;
 
-    private double[][] expectedPath1 = {{1, 3, 7}, {3, 2, 3}, {2, 1, 5}};
-    private double[][] expectedPath2 = {{3, 9, 0.058634722483110857}, {9, 2, 0.017691113553356841}, {2, 3, 0.19479123717630864}};
-    private double[][] expectedPath3 = {{0, 3, 0.093657182550063167}, {3, 9, 0.063737879374141326}, {9, 0, 0.065462780112450769}};
-    private double[][] expectedPath4 = null;
-    private double[][] expectedPath5 = {{9, 2, 0.095555757812653352}, {2, 11, 0.014929778639893532}, {11, 9, 0.092718623645230314}};
-    private double[][] expectedPath6 = {{14, 8, 0.23649901286119512}, {8, 12, 0.18783148139677397}, {12, 14, 0.020812929131225788}};
+    // expected minimum mean path for graph instance
+    private double[][] expectedCycle1 = {{1, 3, 7}, {3, 2, 3}, {2, 1, 5}};
+    private double[][] expectedCycle2 = {{3, 9, 0.058634722483110857}, {9, 2, 0.017691113553356841}, {2, 3, 0.19479123717630864}};
+    private double[][] expectedCycle3 = {{0, 3, 0.093657182550063167}, {3, 9, 0.063737879374141326}, {9, 0, 0.065462780112450769}};
+    private double[][] expectedCycle4 = null;
+    private double[][] expectedCycle5 = {{9, 2, 0.095555757812653352}, {2, 11, 0.014929778639893532}, {11, 9, 0.092718623645230314}};
+    private double[][] expectedCycle6 = {{14, 8, 0.23649901286119512}, {8, 12, 0.18783148139677397}, {12, 14, 0.020812929131225788}};
 
     @Test
     public void testGraph1() {
-        testOnGraph(graph1, expectedMean1, expectedPath1);
+        testOnGraph(graph1, expectedMean1, expectedCycle1);
     }
 
     @Test
     public void testGraph2() {
-        testOnGraph(graph2, expectedMean2, expectedPath2);
+        testOnGraph(graph2, expectedMean2, expectedCycle2);
     }
 
     @Test
     public void testGraph3() {
-        testOnGraph(graph3, expectedMean3, expectedPath3);
+        testOnGraph(graph3, expectedMean3, expectedCycle3);
     }
 
     @Test
     public void testGraph4() {
-        testOnGraph(graph4, expectedMean4, expectedPath4);
+        testOnGraph(graph4, expectedMean4, expectedCycle4);
     }
 
     @Test
     public void testGraph5() {
-        testOnGraph(graph5, expectedMean5, expectedPath5);
+        testOnGraph(graph5, expectedMean5, expectedCycle5);
     }
 
     @Test
     public void testGraph6() {
-        testOnGraph(graph6, expectedMean6, expectedPath6);
+        testOnGraph(graph6, expectedMean6, expectedCycle6);
     }
 
-
-    private void testOnGraph(double[][] graphArray, double expectedMean, double[][] expectedPathArray) {
+    /**
+     * Tests the algorithm on the graph instance {@code graphArray} using {@code expectedMean}
+     * and {@code expectedCycleArray} to check correctness.
+     *
+     * @param graphArray         graph instance
+     * @param expectedMean       mean value
+     * @param expectedCycleArray minimum mean cycle
+     */
+    private void testOnGraph(double[][] graphArray, double expectedMean, double[][] expectedCycleArray) {
         if (graphArray == null) {
             return;
         }
         Graph<Integer, DefaultWeightedEdge> graph = readGraph(graphArray);
         GraphPath<Integer, DefaultWeightedEdge> expectedPath;
-        if (expectedPathArray == null) {
+        if (expectedCycleArray == null) {
             expectedPath = null;
         } else {
-            expectedPath = readPath(expectedPathArray, graph);
+            expectedPath = readPath(expectedCycleArray, graph);
         }
 
         HowardMinimumMeanCycle<Integer, DefaultWeightedEdge> mmc = new HowardMinimumMeanCycle<>(graph);
@@ -159,6 +189,12 @@ public class HowardMinimumMeanCycleTest {
     }
 
 
+    /**
+     * Construct graph stored in {@code graph}.
+     *
+     * @param graph graph
+     * @return constructed graph instance
+     */
     private Graph<Integer, DefaultWeightedEdge> readGraph(double[][] graph) {
         Graph<Integer, DefaultWeightedEdge> result = new DirectedWeightedPseudograph<>(DefaultWeightedEdge.class);
         for (double[] edgeArray : graph) {
@@ -171,6 +207,13 @@ public class HowardMinimumMeanCycleTest {
         return result;
     }
 
+    /**
+     * Constructs path stored in {@code path}.
+     *
+     * @param path  path
+     * @param graph graph
+     * @return constructed path instance
+     */
     private GraphPath<Integer, DefaultWeightedEdge> readPath(double[][] path, Graph<Integer, DefaultWeightedEdge> graph) {
         int startVertex = (int) path[0][0];
         int endVertex = (int) path[path.length - 1][1];
