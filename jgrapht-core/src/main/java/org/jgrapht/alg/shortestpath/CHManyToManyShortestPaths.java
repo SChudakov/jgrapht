@@ -61,13 +61,22 @@ import static org.jgrapht.alg.shortestpath.ContractionHierarchyPrecomputation.Co
  * shortest paths trees.
  *
  * <p>
- * The efficiency of this algorithm is derived from the fact that contraction hierarchy produces fairly small
- * shortest paths trees. This allows to both speedup the computations and decrease memory usage to store the
- * paths.
+ * Additionally if $|S|$ > $|T|$ the algorithm is execution on the reversed graph. This allows
+ * to reduce the number of buckets and optimize memory usage of the algorithm.
+ *
+ * <p>
+ * The efficiency of this algorithm is derived from the fact that contraction hierarchy produces
+ * fairly small shortest paths trees. This allows to both speedup the computations and decrease
+ * memory usage to store the paths. The bottleneck of the algorithm is the contraction hierarchy
+ * computation, which can lead to significant overhead for dense graphs both in terms of running
+ * time and space complexity. Therefore the ideal use case for this algorithm are sparse graphs
+ * of any size with low average out-degree id vertices.
  *
  * @param <V> the graph vertex type
  * @param <E> the graph edge type
  * @author Semen Chudakov
+ * @see DefaultManyToManyShortestPaths
+ * @see DijkstraManyToManyShortestPaths
  */
 public class CHManyToManyShortestPaths<V, E> extends BaseManyToManyShortestPaths<V, E> {
     /**
