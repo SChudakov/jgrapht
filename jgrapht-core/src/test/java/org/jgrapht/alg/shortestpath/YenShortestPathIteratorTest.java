@@ -23,6 +23,7 @@ import org.jgrapht.generate.*;
 import org.jgrapht.graph.*;
 import org.jgrapht.util.*;
 import org.junit.*;
+import org.junit.experimental.theories.suppliers.TestedOn;
 
 import java.util.*;
 
@@ -37,7 +38,6 @@ public class YenShortestPathIteratorTest
     extends
     BaseKShortestPathTest
 {
-
     /**
      * Seed value which is used to generate random graphs by
      * {@code getRandomGraph(Graph, int, double)} method.
@@ -382,6 +382,42 @@ public class YenShortestPathIteratorTest
 
         assertTrue(it.hasNext());
         verifyNextPath(it, 1.0, false);
+    }
+
+    @Test
+    public void testForbidAll(){
+        Graph<Integer, DefaultWeightedEdge> graph = new WeightedPseudograph<>(DefaultWeightedEdge.class);
+        readGraph(graph, pseudograph1);
+        Integer source = 1;
+        Integer target = 5;
+        YenShortestPathIterator<Integer,DefaultWeightedEdge> iterator =
+                new YenShortestPathIterator<>(graph, source, target, (partialPath, edge) -> false);
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void testNonTrivialPathValidator(){
+        Graph<Integer, DefaultWeightedEdge> graph = new WeightedPseudograph<>(DefaultWeightedEdge.class);
+        readGraph(graph, pseudograph3);
+        Integer source = 1;
+        Integer target = 3;
+        PathValidator<Integer,DefaultWeightedEdge> validator = (partialPath, edge) -> {
+            if(graph.getEdgeSource(edge).equals(1) &&
+                    graph.getEdgeSource(edge).equals(2) &&
+                    graph.getEdgeWeight(edge) == 2.0){
+                return false;
+            }
+            if(graph.getEdgeSource(edge).equals(2) &&
+                    graph.getEdgeSource(edge).equals(3) &&
+                    graph.getEdgeWeight(edge) == 4.0){
+                return false;
+            }
+            return true;
+        };
+        YenShortestPathIterator<Integer,DefaultWeightedEdge> iterator =
+                new YenShortestPathIterator<>(graph, source, target, validator);
+        verifyNextPath(iterator, 6.0, true);
+        verifyNextPath(iterator, 8.0, false);
     }
 
     @Test

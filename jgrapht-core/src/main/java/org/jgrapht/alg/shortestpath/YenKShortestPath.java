@@ -56,6 +56,8 @@ public class YenKShortestPath<V, E>
      */
     private final Graph<V, E> graph;
 
+    private PathValidator<V,E> pathValidator;
+
     /**
      * Constructs an instance of the algorithm for the given {@code graph}.
      *
@@ -63,7 +65,19 @@ public class YenKShortestPath<V, E>
      */
     public YenKShortestPath(Graph<V, E> graph)
     {
+        this(graph, (partialPath, edge) -> true);
+    }
+
+    /**
+     * Constructs an instance of the algorithm for the given {@code graph}
+     * and {@code pathValidator}.
+     *
+     * @param graph graph
+     */
+    public YenKShortestPath(Graph<V, E> graph, PathValidator<V,E> pathValidator)
+    {
         this.graph = Objects.requireNonNull(graph, "Graph cannot be null!");
+        this.pathValidator = Objects.requireNonNull(pathValidator, "Path validator should not be null!");
     }
 
     /**
@@ -83,7 +97,7 @@ public class YenKShortestPath<V, E>
             throw new IllegalArgumentException("k should be positive");
         }
         List<GraphPath<V, E>> result = new ArrayList<>();
-        YenShortestPathIterator<V, E> iterator = new YenShortestPathIterator<>(graph, source, sink);
+        YenShortestPathIterator<V, E> iterator = new YenShortestPathIterator<>(graph, source, sink, pathValidator);
         for (int i = 0; i < k && iterator.hasNext(); i++) {
             int amountOfPathLeft = k - i;
             if (iterator.getNumberOfCandidatesWithMinimumWeight() == amountOfPathLeft) {

@@ -57,6 +57,10 @@ class BaseKShortestPathTest
         { { 1, 1, 0 }, { 1, 1, 1 }, { 1, 2, 2 }, { 1, 2, 3 }, { 1, 2, 4 }, { 2, 2, 5 }, { 2, 3, 6 },
             { 2, 3, 7 }, { 3, 3, 8 }, { 3, 4, 9 }, { 3, 4, 10 }, { 4, 4, 11 } };
 
+    protected final int[][] pseudograph3 =
+            { {1, 2, 1}, {1, 2, 2}, {1, 2, 3}, {2, 3, 4}, {2, 3, 5} };
+
+
     protected void readGraph(Graph<Integer, DefaultWeightedEdge> graph, int[][] representation)
     {
         for (int[] ints : representation) {
