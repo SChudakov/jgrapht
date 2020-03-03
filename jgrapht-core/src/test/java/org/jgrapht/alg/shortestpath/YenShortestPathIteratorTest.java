@@ -397,17 +397,17 @@ public class YenShortestPathIteratorTest
 
     @Test
     public void testNonTrivialPathValidator(){
-        Graph<Integer, DefaultWeightedEdge> graph = new WeightedPseudograph<>(DefaultWeightedEdge.class);
+        Graph<Integer, DefaultWeightedEdge> graph = new DirectedWeightedPseudograph<>(DefaultWeightedEdge.class);
         readGraph(graph, pseudograph3);
         Integer source = 1;
         Integer target = 3;
         PathValidator<Integer,DefaultWeightedEdge> validator = (partialPath, edge) -> {
-            if(graph.getEdgeSource(edge).equals(1) &&
+            if (graph.getEdgeSource(edge).equals(1) &&
                     graph.getEdgeSource(edge).equals(2) &&
                     graph.getEdgeWeight(edge) == 2.0){
                 return false;
             }
-            if(graph.getEdgeSource(edge).equals(2) &&
+            if (graph.getEdgeSource(edge).equals(2) &&
                     graph.getEdgeSource(edge).equals(3) &&
                     graph.getEdgeWeight(edge) == 4.0){
                 return false;

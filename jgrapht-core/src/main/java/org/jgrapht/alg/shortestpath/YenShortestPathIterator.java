@@ -17,28 +17,14 @@
  */
 package org.jgrapht.alg.shortestpath;
 
-import org.jgrapht.Graph;
-import org.jgrapht.GraphPath;
-import org.jgrapht.Graphs;
-import org.jgrapht.alg.util.Pair;
-import org.jgrapht.graph.EdgeReversedGraph;
-import org.jgrapht.graph.GraphWalk;
-import org.jgrapht.graph.MaskSubgraph;
-import org.jheaps.AddressableHeap;
-import org.jheaps.tree.PairingHeap;
+import org.jgrapht.*;
+import org.jgrapht.alg.util.*;
+import org.jgrapht.graph.*;
+import org.jheaps.*;
+import org.jheaps.tree.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-import java.util.function.Supplier;
+import java.util.*;
+import java.util.function.*;
 
 /**
  * Iterator over the shortest loopless paths between two vertices in a graph sorted by weight.
@@ -143,12 +129,13 @@ public class YenShortestPathIterator<V, E>
      */
     public YenShortestPathIterator(Graph<V, E> graph, V source, V sink)
     {
-        this(graph, source, sink, ((partialPath, edge) -> true));
+        this(graph, source, sink, null);
     }
 
     /**
      * Constructs an instance of the algorithm for given {@code graph}, {@code source},
-     * {@code sink} and {@code pathValidator}.
+     * {@code sink} and {@code pathValidator}. The {@code pathValidator} can be $null$,
+     * which will indicate that all paths are valid.
      *
      * @param graph         graph
      * @param source        source vertex
@@ -161,7 +148,8 @@ public class YenShortestPathIterator<V, E>
 
     /**
      * Constructs an instance of the algorithm for given {@code graph}, {@code source},
-     * {@code sink}, {@code heapSupplier} and {@code pathValidator}.
+     * {@code sink}, {@code heapSupplier} and {@code pathValidator}. The {@code pathValidator}
+     * can be $null$, which will indicate that all paths are valid.
      *
      * @param graph         graph
      * @param source        source vertex
@@ -183,7 +171,7 @@ public class YenShortestPathIterator<V, E>
             throw new IllegalArgumentException("Graph should contain sink vertex!");
         }
         this.sink = sink;
-        this.pathValidator = Objects.requireNonNull(pathValidator, "Path validator should not be null!");
+        this.pathValidator = pathValidator;
         Objects.requireNonNull(heapSupplier, "Heap supplier cannot be null");
         this.resultList = new ArrayList<>();
         this.candidatePaths = heapSupplier.get();
@@ -213,11 +201,23 @@ public class YenShortestPathIterator<V, E>
     @Override
     public GraphPath<V, E> next()
     {
-        if (candidatePaths.isEmpty()) {
+        GraphPath<V, E> path = null;
+        boolean pathFound = false;
+
+        while (!pathFound && !candidatePaths.isEmpty()){
+            path = candidatePaths.deleteMin().getValue();
+            processPath(path);
+            pathFound =  validPath(path);
+        }
+
+        if (!pathFound) {
             throw new NoSuchElementException();
         }
 
-        GraphPath<V, E> path = candidatePaths.deleteMin().getValue();
+        return path;
+    }
+
+    private void processPath(GraphPath<V,E> path){
         resultList.add(path);
         double pathWeight = path.getWeight();
         int minWeightFrequency = weightsFrequencies.get(pathWeight);
@@ -234,8 +234,25 @@ public class YenShortestPathIterator<V, E>
         }
 
         addDeviations(path);
+    }
 
-        return path;
+    private boolean validPath(GraphPath<V,E> path){
+        if(pathValidator == null){
+            return true;
+        }
+        List<V> vertices = path.getVertexList();
+        List<E> edges = path.getEdgeList();
+
+        double partialPathWeight = 0.0;
+        boolean validPath = true;
+        for(int i = 0; i < edges.size() && validPath; ++i){
+            GraphPath<V,E> partialPath = new GraphWalk<>(path.getGraph(), path.getStartVertex(), path.getEndVertex(),
+                    vertices.subList(0, i + 1), edges.subList(0, i), partialPathWeight);
+            E edge = edges.get(i);
+            validPath = pathValidator.isValidPath(partialPath, edge);
+            partialPathWeight += graph.getEdgeWeight(edge);
+        }
+        return validPath;
     }
 
     /**
@@ -284,12 +301,10 @@ public class YenShortestPathIterator<V, E>
                 proceed = false;
             }
 
-            GraphPath<V, E> partialPath = new GraphSubpath<>(graph, path, recoverVertex, i + 1, i);
-
             // recover vertex
             customTree.recoverVertex(recoverVertex);
             customTree.correctDistanceForward(recoverVertex);
-            GraphPath<V, E> spurPath = customTree.getSpurPath(partialPath, recoverVertex);
+            GraphPath<V, E> spurPath = customTree.getPath(recoverVertex);
 
             // construct a new path if possible
             if (spurPath != null) {
@@ -330,13 +345,13 @@ public class YenShortestPathIterator<V, E>
      * {@code pathDeviation} masks the edge between the {@code pathDeviation} and its successor in
      * this path.
      *
-     * @param path               path to mask vertices and edges of
-     * @param pathDeviation      deviation vertex of the path
+     * @param path path to mask vertices and edges of
+     * @param pathDeviation deviation vertex of the path
      * @param pathDeviationIndex index of the deviation vertex in the vertices list of the path
      * @return pair of sets of masked vertices and edges
      */
     private Pair<Set<V>, Set<E>> getMaskedVerticesAndEdges(
-            GraphPath<V, E> path, V pathDeviation, int pathDeviationIndex)
+        GraphPath<V, E> path, V pathDeviation, int pathDeviationIndex)
     {
         List<V> pathVertices = path.getVertexList();
         List<E> pathEdges = path.getEdgeList();
@@ -376,9 +391,9 @@ public class YenShortestPathIterator<V, E>
      * adds the root part of the candidate by traversing the vertices and edges of the {@code path}
      * until the {@code recoverVertexIndex}. Then adds vertices and edges of the {@code spurPath}.
      *
-     * @param path               path the candidate path deviates from
+     * @param path path the candidate path deviates from
      * @param recoverVertexIndex vertex that is being recovered
-     * @param spurPath           spur path of the candidate
+     * @param spurPath spur path of the candidate
      * @return candidate path
      */
     private GraphPath<V, E> getCandidatePath(
@@ -417,9 +432,9 @@ public class YenShortestPathIterator<V, E>
     /**
      * Checks if the lists have the same content until the {@code index} (inclusive).
      *
-     * @param first  first list
+     * @param first first list
      * @param second second list
-     * @param index  position in the lists
+     * @param index position in the lists
      * @return true iff the contents of the list are equal until the index
      */
     private boolean equalLists(List<V> first, List<V> second, int index)
@@ -453,12 +468,12 @@ public class YenShortestPathIterator<V, E>
          * Constructs an instance of the shortest paths tree for the given {@code maskSubgraph},
          * {@code maskedVertices}, {@code maskedEdges}, {@code reversedTree}, {@code treeSource}.
          *
-         * @param maskSubgraph   graph which has removed vertices and edges
+         * @param maskSubgraph graph which has removed vertices and edges
          * @param maskedVertices vertices removed form the graph
-         * @param maskedEdges    edges removed from the graph
-         * @param reversedTree   shortest path tree in the edge reversed {@code maskSubgraph} starting
-         *                       at {@code treeSource}.
-         * @param treeSource     source vertex of the {@code reversedTree}
+         * @param maskedEdges edges removed from the graph
+         * @param reversedTree shortest path tree in the edge reversed {@code maskSubgraph} starting
+         *        at {@code treeSource}.
+         * @param treeSource source vertex of the {@code reversedTree}
          */
         YenShortestPathsTree(
             Graph<V, E> maskSubgraph, Set<V> maskedVertices, Set<E> maskedEdges,
@@ -467,15 +482,6 @@ public class YenShortestPathIterator<V, E>
             super(maskSubgraph, treeSource, reversedTree);
             this.maskedVertices = maskedVertices;
             this.maskedEdges = maskedEdges;
-        }
-
-        public GraphPath<V, E> getSpurPath(GraphPath<V, E> partialPath, V recoverVertex) {
-            Pair<Double, E> p = map.get(recoverVertex);
-            if (p == null || p.getFirst().equals(Double.POSITIVE_INFINITY)
-                    || !pathValidator.isValidPath(partialPath, p.getSecond())) {
-                return null;
-            }
-            return super.getPath(recoverVertex);
         }
 
         /**
@@ -557,56 +563,6 @@ public class YenShortestPathIterator<V, E>
                     }
                 }
             }
-        }
-    }
-
-    static class GraphSubpath<V, E> implements GraphPath<V, E> {
-        private final Graph<V, E> graph;
-        private final GraphPath<V, E> base;
-        private final int endVertexIndex;
-        private final int endEdgeIndex;
-
-        private V startVertex;
-        private V endVertex;
-
-        public GraphSubpath(Graph<V, E> graph, GraphPath<V, E> base, V endVertex, int endVertexIndex, int endEdgeIndex) {
-            this.graph = graph;
-            this.base = base;
-            this.endVertexIndex = endVertexIndex;
-            this.endEdgeIndex = endEdgeIndex;
-
-            this.startVertex = base.getStartVertex();
-            this.endVertex = endVertex;
-        }
-
-        @Override
-        public Graph<V, E> getGraph() {
-            return graph;
-        }
-
-        @Override
-        public V getStartVertex() {
-            return startVertex;
-        }
-
-        @Override
-        public V getEndVertex() {
-            return endVertex;
-        }
-
-        @Override
-        public double getWeight() {
-            return getEdgeList().stream().mapToDouble(graph::getEdgeWeight).sum();
-        }
-
-        @Override
-        public List<E> getEdgeList() {
-            return base.getEdgeList().subList(0, endEdgeIndex);
-        }
-
-        @Override
-        public List<V> getVertexList() {
-            return base.getVertexList().subList(0, endVertexIndex);
         }
     }
 }
