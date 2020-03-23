@@ -19,6 +19,7 @@ package org.jgrapht.alg.shortestpath;
 
 import org.jgrapht.*;
 import org.jgrapht.alg.interfaces.*;
+import org.jgrapht.alg.util.Pair;
 import org.jheaps.*;
 
 import java.util.*;
@@ -101,9 +102,9 @@ public class YenKShortestPath<V, E>
         for (int i = 0; i < k && iterator.hasNext(); i++) {
             int amountOfPathLeft = k - i;
             if (iterator.getNumberOfCandidatesWithMinimumWeight() == amountOfPathLeft) {
-                AddressableHeap<Double, GraphPath<V, E>> candidates = iterator.getCandidatePaths();
+                AddressableHeap<Double, Pair<GraphPath<V, E>, Boolean>> candidates = iterator.getCandidatePaths();
                 for (int j = 0; j < amountOfPathLeft; j++) {
-                    result.add(candidates.deleteMin().getValue());
+                    result.add(candidates.deleteMin().getValue().getFirst());
                 }
                 break;
             }
