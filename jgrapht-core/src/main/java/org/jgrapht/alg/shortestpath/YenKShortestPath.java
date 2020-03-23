@@ -28,8 +28,8 @@ import java.util.*;
  * Implementation of Yen`s algorithm for finding $k$ shortest loopless paths.
  *
  * <p>
- * The time complexity of the algorithm is $O(kn(m + n log n))$, where $n$ is the amount of vertices
- * in the graph, $m$ is the amount of edges in the graph and $k$ is the amount of paths needed.
+ * The time complexity of the algorithm is $O(kn(m + n log n))$, where $n$ is the number of vertices
+ * in the graph, $m$ is the number of edges in the graph and $k$ is the number of paths needed.
  *
  * <p>
  * The algorithm is originally described in: Q. V. Martins, Ernesto and M. B. Pascoal, Marta.
@@ -39,7 +39,7 @@ import java.util.*;
  * <p>
  * The implementation iterates over the existing loopless path between the {@code source} and the
  * {@code sink} and forms the resulting list. During the execution the algorithm keeps track of how
- * many candidates with minimum weight exist. If the amount is greater or equal to the amount of
+ * many candidates with minimum weight exist. If the number is greater or equal to the number of
  * path needed to complete the execution, the algorithm retrieves the rest of the path from the
  * candidates heap and adds them to the resulting list.
  *
@@ -66,7 +66,7 @@ public class YenKShortestPath<V, E>
      */
     public YenKShortestPath(Graph<V, E> graph)
     {
-        this(graph, (partialPath, edge) -> true);
+        this(graph, null);
     }
 
     /**
@@ -78,7 +78,7 @@ public class YenKShortestPath<V, E>
     public YenKShortestPath(Graph<V, E> graph, PathValidator<V,E> pathValidator)
     {
         this.graph = Objects.requireNonNull(graph, "Graph cannot be null!");
-        this.pathValidator = Objects.requireNonNull(pathValidator, "Path validator should not be null!");
+        this.pathValidator = pathValidator;
     }
 
     /**
@@ -100,11 +100,16 @@ public class YenKShortestPath<V, E>
         List<GraphPath<V, E>> result = new ArrayList<>();
         YenShortestPathIterator<V, E> iterator = new YenShortestPathIterator<>(graph, source, sink, pathValidator);
         for (int i = 0; i < k && iterator.hasNext(); i++) {
-            int amountOfPathLeft = k - i;
-            if (iterator.getNumberOfCandidatesWithMinimumWeight() == amountOfPathLeft) {
+            int numberOfPathLeft = k - i;
+            if (iterator.getNumberOfValidCandidatesWithMinimumWeight() == numberOfPathLeft) {
                 AddressableHeap<Double, Pair<GraphPath<V, E>, Boolean>> candidates = iterator.getCandidatePaths();
-                for (int j = 0; j < amountOfPathLeft; j++) {
-                    result.add(candidates.deleteMin().getValue().getFirst());
+                int numberOfPathAdded = 0;
+                while (numberOfPathAdded < numberOfPathLeft) {
+                    Pair<GraphPath<V,E>, Boolean> p = candidates.deleteMin().getValue();
+                    if(p.getSecond()){
+                        result.add(p.getFirst());
+                        ++numberOfPathAdded;
+                    }
                 }
                 break;
             }

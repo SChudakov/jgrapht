@@ -86,7 +86,9 @@ public class YenShortestPathIterator<V, E>
     /**
      * Keeps track of the vertex at which each path deviates from its "parent" path.
      */
-    private Map<GraphPath<V, E>, V> deviations;
+    private Map<GraphPath<V, E>, V> firstDeviations;
+
+    private Map<GraphPath<V,E>, V> lastDeviations;
 
     /**
      * Keeps track of the number of paths in the candidates heap which have a particular weight. The
@@ -97,16 +99,18 @@ public class YenShortestPathIterator<V, E>
     /**
      * Stores the number of paths in {@code candidatePaths} with minimum weight.
      */
-    private int numberOfCandidatesWithMinimumWeight;
+    private int numberOfValidCandidatesWithMinimumWeight;
+
+    private int numberOfValidPathInQueue;
 
     /**
      * Returns current number of candidate paths with minimum weight.
      *
      * @return current number of candidate paths with minimum weight
      */
-    int getNumberOfCandidatesWithMinimumWeight()
+    int getNumberOfValidCandidatesWithMinimumWeight()
     {
-        return numberOfCandidatesWithMinimumWeight;
+        return numberOfValidCandidatesWithMinimumWeight;
     }
 
     /**
@@ -175,35 +179,58 @@ public class YenShortestPathIterator<V, E>
         Objects.requireNonNull(heapSupplier, "Heap supplier cannot be null");
         this.resultList = new ArrayList<>();
         this.candidatePaths = heapSupplier.get();
-        this.deviations = new HashMap<>();
+        this.firstDeviations = new HashMap<>();
+        this.lastDeviations = new HashMap<>();
         this.weightsFrequencies = new HashMap<>();
 
         GraphPath<V, E> shortestPath = DijkstraShortestPath.findPathBetween(graph, source, sink);
-        boolean shortestPathIsValid = isValidPath(shortestPath);
+        V lastValidDeviation = getLastValidDeviation(shortestPath, source);
+
         if (shortestPath != null) {
+            boolean shortestPathIsValid = lastValidDeviation == null;
+            if(shortestPathIsValid){
+                ++numberOfValidPathInQueue;
+            }
             candidatePaths.insert(shortestPath.getWeight(), Pair.of(shortestPath, shortestPathIsValid));
-            deviations.put(shortestPath, source);
+            firstDeviations.put(shortestPath, source);
+            lastDeviations.put(shortestPath, lastValidDeviation);
             weightsFrequencies.put(shortestPath.getWeight(), 1);
+
+            ensureAtLeastOneValidPathInQueue();
         }
     }
 
-    private boolean isValidPath(GraphPath<V,E> path){
+    private void ensureAtLeastOneValidPathInQueue() {
+        while(numberOfValidPathInQueue == 0 && !candidatePaths.isEmpty()){
+            GraphPath<V,E> currentPath = candidatePaths.deleteMin().getValue().getFirst();
+            int numberOfValidDeviations = addDeviations(currentPath);
+            numberOfValidPathInQueue += numberOfValidDeviations;
+        }
+    }
+
+
+    private V getLastValidDeviation(GraphPath<V,E> path, V firstDeviation){
         if(pathValidator == null){
-            return true;
+            return null;
         }
         List<V> vertices = path.getVertexList();
         List<E> edges = path.getEdgeList();
 
+        V result = null;
         double partialPathWeight = 0.0;
-        boolean validPath = true;
-        for(int i = 0; i < edges.size() && validPath; ++i){
-            GraphPath<V,E> partialPath = new GraphWalk<>(path.getGraph(), path.getStartVertex(), path.getEndVertex(),
+        int firstDeviationIndex = vertices.indexOf(firstDeviation);
+        for(int i = firstDeviationIndex; i < edges.size(); ++i){
+            GraphPath<V,E> partialPath = new GraphWalk<>(path.getGraph(), path.getStartVertex(), vertices.get(i),
                     vertices.subList(0, i + 1), edges.subList(0, i), partialPathWeight);
             E edge = edges.get(i);
-            validPath = pathValidator.isValidPath(partialPath, edge);
+            boolean isValid = pathValidator.isValidPath(partialPath, edge);
+            if (!isValid) {
+                result = vertices.get(i);
+                break;
+            }
             partialPathWeight += graph.getEdgeWeight(edge);
         }
-        return validPath;
+        return result;
     }
 
     /**
@@ -221,41 +248,48 @@ public class YenShortestPathIterator<V, E>
     @Override
     public GraphPath<V, E> next()
     {
-        GraphPath<V, E> path = null;
-        boolean pathFound = false;
-
-        while (!pathFound && !candidatePaths.isEmpty()){
-            Pair<GraphPath<V,E>, Boolean> p = candidatePaths.deleteMin().getValue();
-            path = p.getFirst();
-            pathFound =  p.getSecond();
-            processPath(path);
-        }
-
-        if (!pathFound) {
+        if (candidatePaths.isEmpty()) {
             throw new NoSuchElementException();
         }
 
-        return path;
+        GraphPath<V,E> result = null;
+        while(result == null){
+            Pair<GraphPath<V,E>, Boolean> p = candidatePaths.deleteMin().getValue();
+            GraphPath<V, E> path = p.getFirst();
+            boolean isValid = p.getSecond();
+
+            if(isValid){
+                result = path;
+                processPath(path);
+                --numberOfValidPathInQueue;
+            }
+
+            int numberOfValidDeviations = addDeviations(path);
+            numberOfValidPathInQueue += numberOfValidDeviations;
+        }
+
+        ensureAtLeastOneValidPathInQueue();
+        return result;
     }
 
-    private void processPath(GraphPath<V,E> path){
+    void processPath(GraphPath<V,E> path){
         resultList.add(path);
+
         double pathWeight = path.getWeight();
         int minWeightFrequency = weightsFrequencies.get(pathWeight);
         if (minWeightFrequency == 1) {
             weightsFrequencies.remove(pathWeight);
             if (candidatePaths.isEmpty()) {
-                numberOfCandidatesWithMinimumWeight = 0;
+                numberOfValidCandidatesWithMinimumWeight = 0;
             } else {
-                numberOfCandidatesWithMinimumWeight =
-                    weightsFrequencies.get(candidatePaths.findMin().getKey());
+                numberOfValidCandidatesWithMinimumWeight =
+                        weightsFrequencies.get(candidatePaths.findMin().getKey());
             }
         } else {
             weightsFrequencies.put(pathWeight, minWeightFrequency - 1);
         }
-
-        addDeviations(path);
     }
+
 
     /**
      * Builds unique loopless deviations from the given path in the {@code graph}. First receives
@@ -268,11 +302,15 @@ public class YenShortestPathIterator<V, E>
      * algorithm.
      *
      * @param path path to build deviations of
+     *
+     * @return number of computed valid deviations
      */
-    private void addDeviations(GraphPath<V, E> path)
+    private int addDeviations(GraphPath<V, E> path)
     {
+        int result = 0;
+
         // initializations
-        V pathDeviation = deviations.get(path);
+        V pathDeviation = firstDeviations.get(path);
         List<V> pathVertices = path.getVertexList();
         List<E> pathEdges = path.getEdgeList();
         int pathVerticesSize = pathVertices.size();
@@ -295,20 +333,27 @@ public class YenShortestPathIterator<V, E>
         YenShortestPathsTree customTree = new YenShortestPathsTree(
             maskSubgraph, maskedVertices, maskedEdges, distanceAndPredecessorMap, sink);
 
+        // get index of last deviation
+        V lastDeviation = lastDeviations.get(path);
+        int lastDeviationIndex;
+        if(lastDeviation == null) { // path is valid
+            lastDeviationIndex = pathVerticesSize - 2;
+        }else{
+            lastDeviationIndex = pathVertices.indexOf(lastDeviation);
+        }
+
         // build spur paths by iteratively recovering vertices of the current path
         boolean proceed = true;
-        for (int i = pathVerticesSize - 2; i >= 0 && proceed; i--) {
+        for (int i = lastDeviationIndex; i >= 0 && proceed; i--) {
             V recoverVertex = pathVertices.get(i);
             if (recoverVertex.equals(pathDeviation)) {
                 proceed = false;
             }
 
-            GraphPath<V, E> partialPath = new GraphSubpath<>(graph, path, recoverVertex, i + 1, i);
-
             // recover vertex
             customTree.recoverVertex(recoverVertex);
             customTree.correctDistanceForward(recoverVertex);
-            GraphPath<V, E> spurPath = customTree.getSpurPath(partialPath, recoverVertex);
+            GraphPath<V, E> spurPath = customTree.getPath(recoverVertex);
 
             // construct a new path if possible
             if (spurPath != null) {
@@ -316,15 +361,21 @@ public class YenShortestPathIterator<V, E>
 
                 GraphPath<V, E> candidate = getCandidatePath(path, i, spurPath);
                 double candidateWeight = candidate.getWeight();
+                V candidateLastDeviation = getLastValidDeviation(candidate, recoverVertex);
+                boolean candidateIsValid = candidateLastDeviation == null;
 
-                candidatePaths.insert(candidateWeight, candidate);
-                deviations.put(candidate, recoverVertex);
+                candidatePaths.insert(candidateWeight, Pair.of(candidate, candidateIsValid));
+                firstDeviations.put(candidate, recoverVertex);
+                lastDeviations.put(candidate, candidateLastDeviation);
 
-                if (weightsFrequencies.containsKey(candidateWeight)) {
-                    weightsFrequencies
-                        .computeIfPresent(candidateWeight, (weight, frequency) -> frequency + 1);
-                } else {
-                    weightsFrequencies.put(candidateWeight, 1);
+                if (candidateIsValid) {
+                    ++result;
+                    if (weightsFrequencies.containsKey(candidateWeight)) {
+                        weightsFrequencies
+                                .computeIfPresent(candidateWeight, (weight, frequency) -> frequency + 1);
+                    } else {
+                        weightsFrequencies.put(candidateWeight, 1);
+                    }
                 }
             }
             // recover edge
@@ -340,6 +391,7 @@ public class YenShortestPathIterator<V, E>
                 customTree.correctDistanceBackward(recoverVertex);
             }
         }
+        return result;
     }
 
     /**
@@ -488,15 +540,6 @@ public class YenShortestPathIterator<V, E>
             this.maskedEdges = maskedEdges;
         }
 
-        public GraphPath<V, E> getSpurPath(GraphPath<V, E> partialPath, V recoverVertex) {
-            Pair<Double, E> p = map.get(recoverVertex);
-            if (p == null || p.getFirst().equals(Double.POSITIVE_INFINITY)
-                    || !pathValidator.isValidPath(partialPath, p.getSecond())) {
-                return null;
-            }
-            return super.getPath(recoverVertex);
-        }
-
         /**
          * Restores vertex {@code v} in the {@code g}.
          *
@@ -576,56 +619,6 @@ public class YenShortestPathIterator<V, E>
                     }
                 }
             }
-        }
-    }
-
-    static class GraphSubpath<V, E> implements GraphPath<V, E> {
-        private final Graph<V, E> graph;
-        private final GraphPath<V, E> base;
-        private final int endVertexIndex;
-        private final int endEdgeIndex;
-
-        private V startVertex;
-        private V endVertex;
-
-        public GraphSubpath(Graph<V, E> graph, GraphPath<V, E> base, V endVertex, int endVertexIndex, int endEdgeIndex) {
-            this.graph = graph;
-            this.base = base;
-            this.endVertexIndex = endVertexIndex;
-            this.endEdgeIndex = endEdgeIndex;
-
-            this.startVertex = base.getStartVertex();
-            this.endVertex = endVertex;
-        }
-
-        @Override
-        public Graph<V, E> getGraph() {
-            return graph;
-        }
-
-        @Override
-        public V getStartVertex() {
-            return startVertex;
-        }
-
-        @Override
-        public V getEndVertex() {
-            return endVertex;
-        }
-
-        @Override
-        public double getWeight() {
-            return getEdgeList().stream().mapToDouble(graph::getEdgeWeight).sum();
-        }
-
-        @Override
-        public List<E> getEdgeList() {
-            return base.getEdgeList().subList(0, endEdgeIndex);
-        }
-
-        @Override
-        public List<V> getVertexList() {
-            return base.getVertexList().subList(0, endVertexIndex);
         }
     }
 }
