@@ -17,28 +17,14 @@
  */
 package org.jgrapht.alg.shortestpath;
 
-import org.jgrapht.Graph;
-import org.jgrapht.GraphPath;
-import org.jgrapht.Graphs;
-import org.jgrapht.alg.util.Pair;
-import org.jgrapht.graph.EdgeReversedGraph;
-import org.jgrapht.graph.GraphWalk;
-import org.jgrapht.graph.MaskSubgraph;
-import org.jheaps.AddressableHeap;
-import org.jheaps.tree.PairingHeap;
+import org.jgrapht.*;
+import org.jgrapht.alg.util.*;
+import org.jgrapht.graph.*;
+import org.jheaps.*;
+import org.jheaps.tree.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-import java.util.function.Supplier;
+import java.util.*;
+import java.util.function.*;
 
 /**
  * Iterator over the shortest loopless paths between two vertices in a graph sorted by weight.
@@ -141,9 +127,9 @@ public class YenShortestPathIterator<V, E>
      * Constructs an instance of the algorithm for given {@code graph}, {@code source} and
      * {@code sink}.
      *
-     * @param graph  graph
+     * @param graph graph
      * @param source source vertex
-     * @param sink   sink vertex
+     * @param sink sink vertex
      */
     public YenShortestPathIterator(Graph<V, E> graph, V source, V sink)
     {
@@ -198,9 +184,9 @@ public class YenShortestPathIterator<V, E>
         this.weightsFrequencies = new HashMap<>();
 
         GraphPath<V, E> shortestPath = DijkstraShortestPath.findPathBetween(graph, source, sink);
-        V lastValidDeviation = getLastValidDeviation(shortestPath, source);
 
         if (shortestPath != null) {
+            V lastValidDeviation = getLastValidDeviation(shortestPath, source);
             boolean shortestPathIsValid = lastValidDeviation == null;
             if(shortestPathIsValid){
                 weightsFrequencies.put(shortestPath.getWeight(), 1);
