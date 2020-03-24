@@ -188,14 +188,16 @@ public class YenShortestPathIterator<V, E>
         if (shortestPath != null) {
             V lastValidDeviation = getLastValidDeviation(shortestPath, source);
             boolean shortestPathIsValid = lastValidDeviation == null;
-            if(shortestPathIsValid){
-                weightsFrequencies.put(shortestPath.getWeight(), 1);
-                ++numberOfValidPathInQueue;
-            }
 
             candidatePaths.insert(shortestPath.getWeight(), Pair.of(shortestPath, shortestPathIsValid));
             firstDeviations.put(shortestPath, source);
             lastDeviations.put(shortestPath, lastValidDeviation);
+
+            if(shortestPathIsValid){
+                numberOfValidCandidatesWithMinimumWeight = 1;
+                weightsFrequencies.put(shortestPath.getWeight(), 1);
+                ++numberOfValidPathInQueue;
+            }
 
             ensureAtLeastOneValidPathInQueue();
         }
@@ -203,8 +205,10 @@ public class YenShortestPathIterator<V, E>
 
     private void ensureAtLeastOneValidPathInQueue() {
         while(numberOfValidPathInQueue == 0 && !candidatePaths.isEmpty()){
-            GraphPath<V,E> currentPath = candidatePaths.deleteMin().getValue().getFirst();
-            processPath(currentPath, false);
+            Pair<GraphPath<V,E>, Boolean> p = candidatePaths.deleteMin().getValue();
+            GraphPath<V,E> currentPath = p.getFirst();
+            boolean isValid = p.getSecond();
+            processPath(currentPath, isValid);
             int numberOfValidDeviations = addDeviations(currentPath);
             numberOfValidPathInQueue += numberOfValidDeviations;
         }

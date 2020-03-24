@@ -17,14 +17,31 @@
  */
 package org.jgrapht.alg.shortestpath;
 
-import org.jgrapht.*;
-import org.jgrapht.alg.interfaces.*;
-import org.jgrapht.generate.*;
-import org.jgrapht.graph.*;
-import org.jgrapht.util.*;
-import org.junit.*;
+import org.jgrapht.Graph;
+import org.jgrapht.GraphPath;
+import org.jgrapht.Graphs;
+import org.jgrapht.alg.interfaces.KShortestPathAlgorithm;
+import org.jgrapht.generate.GnpRandomGraphGenerator;
+import org.jgrapht.generate.GraphGenerator;
+import org.jgrapht.graph.DefaultEdge;
+import org.jgrapht.graph.DefaultWeightedEdge;
+import org.jgrapht.graph.DirectedWeightedPseudograph;
+import org.jgrapht.graph.GraphWalk;
+import org.jgrapht.graph.Multigraph;
+import org.jgrapht.graph.SimpleDirectedWeightedGraph;
+import org.jgrapht.graph.WeightedPseudograph;
+import org.jgrapht.util.CollectionUtil;
+import org.jgrapht.util.SupplierUtil;
+import org.junit.Test;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Random;
+import java.util.Set;
 
 import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertEquals;
@@ -418,6 +435,30 @@ public class YenShortestPathIteratorTest
                 new YenShortestPathIterator<>(graph, source, target, validator);
         verifyNextPath(iterator, 6.0, true);
         verifyNextPath(iterator, 8.0, false);
+    }
+
+    @Test
+    public void testNumberOfCandidatesWithMinimumWeight(){
+        Graph<Integer, DefaultWeightedEdge> graph = new DirectedWeightedPseudograph<>(DefaultWeightedEdge.class);
+        readGraph(graph, pseudograph4);
+        Integer source = 1;
+        Integer target = 4;
+        PathValidator<Integer,DefaultWeightedEdge> validator = (partialPath, edge) -> {
+            if (graph.getEdgeSource(edge).equals(2) &&
+                    graph.getEdgeTarget(edge).equals(4) &&
+                    graph.getEdgeWeight(edge) == 7.0) {
+                return false;
+            }
+            return true;
+        };
+        YenShortestPathIterator<Integer,DefaultWeightedEdge> iterator =
+                new YenShortestPathIterator<>(graph, source, target, validator);
+        assertEquals(iterator.getNumberOfValidCandidatesWithMinimumWeight(), 1);
+        verifyNextPath(iterator, 3.0, true);
+        assertEquals(iterator.getNumberOfValidCandidatesWithMinimumWeight(), 2);
+        verifyNextPath(iterator, 7.0, true);
+        assertEquals(iterator.getNumberOfValidCandidatesWithMinimumWeight(), 1);
+        verifyNextPath(iterator, 9.0, false);
     }
 
     @Test
