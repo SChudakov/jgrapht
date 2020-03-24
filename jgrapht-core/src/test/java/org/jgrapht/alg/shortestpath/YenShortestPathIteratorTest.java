@@ -438,30 +438,6 @@ public class YenShortestPathIteratorTest
     }
 
     @Test
-    public void testNumberOfCandidatesWithMinimumWeight(){
-        Graph<Integer, DefaultWeightedEdge> graph = new DirectedWeightedPseudograph<>(DefaultWeightedEdge.class);
-        readGraph(graph, pseudograph4);
-        Integer source = 1;
-        Integer target = 4;
-        PathValidator<Integer,DefaultWeightedEdge> validator = (partialPath, edge) -> {
-            if (graph.getEdgeSource(edge).equals(2) &&
-                    graph.getEdgeTarget(edge).equals(4) &&
-                    graph.getEdgeWeight(edge) == 7.0) {
-                return false;
-            }
-            return true;
-        };
-        YenShortestPathIterator<Integer,DefaultWeightedEdge> iterator =
-                new YenShortestPathIterator<>(graph, source, target, validator);
-        assertEquals(iterator.getNumberOfValidCandidatesWithMinimumWeight(), 1);
-        verifyNextPath(iterator, 3.0, true);
-        assertEquals(iterator.getNumberOfValidCandidatesWithMinimumWeight(), 2);
-        verifyNextPath(iterator, 7.0, true);
-        assertEquals(iterator.getNumberOfValidCandidatesWithMinimumWeight(), 1);
-        verifyNextPath(iterator, 9.0, false);
-    }
-
-    @Test
     public void testOnRandomGraphs()
     {
         Random random = new Random(SEED);

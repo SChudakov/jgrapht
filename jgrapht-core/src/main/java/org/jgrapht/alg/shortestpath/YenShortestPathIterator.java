@@ -96,32 +96,8 @@ public class YenShortestPathIterator<V, E>
      */
     private Map<Double, Integer> weightsFrequencies;
 
-    /**
-     * Stores the number of paths in {@code candidatePaths} with minimum weight.
-     */
-    private int numberOfValidCandidatesWithMinimumWeight;
-
     private int numberOfValidPathInQueue;
 
-    /**
-     * Returns current number of candidate paths with minimum weight.
-     *
-     * @return current number of candidate paths with minimum weight
-     */
-    int getNumberOfValidCandidatesWithMinimumWeight()
-    {
-        return numberOfValidCandidatesWithMinimumWeight;
-    }
-
-    /**
-     * Returns heap with candidate paths.
-     *
-     * @return heap with candidate paths
-     */
-    AddressableHeap<Double, Pair<GraphPath<V, E>, Boolean>> getCandidatePaths()
-    {
-        return candidatePaths;
-    }
 
     /**
      * Constructs an instance of the algorithm for given {@code graph}, {@code source} and
@@ -194,7 +170,6 @@ public class YenShortestPathIterator<V, E>
             lastDeviations.put(shortestPath, lastValidDeviation);
 
             if(shortestPathIsValid){
-                numberOfValidCandidatesWithMinimumWeight = 1;
                 weightsFrequencies.put(shortestPath.getWeight(), 1);
                 ++numberOfValidPathInQueue;
             }
@@ -208,7 +183,7 @@ public class YenShortestPathIterator<V, E>
             Pair<GraphPath<V,E>, Boolean> p = candidatePaths.deleteMin().getValue();
             GraphPath<V,E> currentPath = p.getFirst();
             boolean isValid = p.getSecond();
-            processPath(currentPath, isValid);
+            resultList.add(currentPath);
             int numberOfValidDeviations = addDeviations(currentPath);
             numberOfValidPathInQueue += numberOfValidDeviations;
         }
@@ -269,7 +244,7 @@ public class YenShortestPathIterator<V, E>
                 --numberOfValidPathInQueue;
             }
 
-            processPath(path, isValid);
+            resultList.add(path);
 
             int numberOfValidDeviations = addDeviations(path);
             numberOfValidPathInQueue += numberOfValidDeviations;
@@ -278,28 +253,6 @@ public class YenShortestPathIterator<V, E>
         ensureAtLeastOneValidPathInQueue();
         return result;
     }
-
-    void processPath(GraphPath<V,E> path, boolean isValid){
-        resultList.add(path);
-
-        if (isValid){
-            double pathWeight = path.getWeight();
-            int minWeightFrequency = weightsFrequencies.get(pathWeight);
-            if (minWeightFrequency == 1) {
-                weightsFrequencies.remove(pathWeight);
-                if (candidatePaths.isEmpty()) {
-                    numberOfValidCandidatesWithMinimumWeight = 0;
-                } else {
-                    double minimumWeight = candidatePaths.findMin().getKey();
-                    numberOfValidCandidatesWithMinimumWeight
-                            = weightsFrequencies.getOrDefault(minimumWeight, 0);
-                }
-            } else {
-                weightsFrequencies.put(pathWeight, minWeightFrequency - 1);
-            }
-        }
-    }
-
 
     /**
      * Builds unique loopless deviations from the given path in the {@code graph}. First receives

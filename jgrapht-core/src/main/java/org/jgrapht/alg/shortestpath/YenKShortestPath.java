@@ -100,19 +100,6 @@ public class YenKShortestPath<V, E>
         List<GraphPath<V, E>> result = new ArrayList<>();
         YenShortestPathIterator<V, E> iterator = new YenShortestPathIterator<>(graph, source, sink, pathValidator);
         for (int i = 0; i < k && iterator.hasNext(); i++) {
-            int numberOfPathLeft = k - i;
-            if (iterator.getNumberOfValidCandidatesWithMinimumWeight() == numberOfPathLeft) {
-                AddressableHeap<Double, Pair<GraphPath<V, E>, Boolean>> candidates = iterator.getCandidatePaths();
-                int numberOfPathAdded = 0;
-                while (numberOfPathAdded < numberOfPathLeft) {
-                    Pair<GraphPath<V,E>, Boolean> p = candidates.deleteMin().getValue();
-                    if(p.getSecond()){
-                        result.add(p.getFirst());
-                        ++numberOfPathAdded;
-                    }
-                }
-                break;
-            }
             result.add(iterator.next());
         }
         return result;
