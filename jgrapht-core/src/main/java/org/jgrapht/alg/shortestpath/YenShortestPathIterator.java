@@ -17,14 +17,28 @@
  */
 package org.jgrapht.alg.shortestpath;
 
-import org.jgrapht.*;
-import org.jgrapht.alg.util.*;
-import org.jgrapht.graph.*;
-import org.jheaps.*;
-import org.jheaps.tree.*;
+import org.jgrapht.Graph;
+import org.jgrapht.GraphPath;
+import org.jgrapht.Graphs;
+import org.jgrapht.alg.util.Pair;
+import org.jgrapht.graph.EdgeReversedGraph;
+import org.jgrapht.graph.GraphWalk;
+import org.jgrapht.graph.MaskSubgraph;
+import org.jheaps.AddressableHeap;
+import org.jheaps.tree.PairingHeap;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Iterator over the shortest loopless paths between two vertices in a graph sorted by weight.
@@ -50,9 +64,16 @@ import java.util.function.*;
  * deviation vertex of current path (including the deviation vertex) it is possible to avoid
  * building duplicated candidates.
  *
+ * <p>
+ * Additionally, the algorithm supports path validation by means of {@link PathValidator}.
+ * To do so, there is a boolean flag for every candidate in the queue, which indicates, if
+ * the path is valid ot not. Invalid paths are kept in the queue, because it is possible
+ * to build a valid path by deviating from invalid path.
+ *
  * @param <V> the graph vertex type
  * @param <E> the graph edge type
  * @author Semen Chudakov
+ * @see PathValidator
  */
 public class YenShortestPathIterator<V, E>
     implements
@@ -71,6 +92,9 @@ public class YenShortestPathIterator<V, E>
      */
     private final V sink;
 
+    /**
+     * Provides possibility to validate computed paths and exclude invalid ones.
+     */
     private PathValidator<V, E> pathValidator;
 
     /**
@@ -88,14 +112,16 @@ public class YenShortestPathIterator<V, E>
      */
     private Map<GraphPath<V, E>, V> firstDeviations;
 
+    /**
+     * For each path $P$ stores the vertex $u$ such that $pathValidator#isValidPath([start_vertex, u], (u,v)) = false$,
+     * where $[start_vertex, u]$ denotes the subpath of $P$ from its start to vertex $u$ and $v$ is the next vertex
+     * in $P$ after $u$. Stores $null$, if there is no such vertex.
+     */
     private Map<GraphPath<V,E>, V> lastDeviations;
 
     /**
-     * Keeps track of the number of paths in the candidates heap which have a particular weight. The
-     * algorithm uses this map to maintain the number of paths with minimum weight in the heap.
+     * Stores number of valid candidates in {@code candidatePaths}.
      */
-    private Map<Double, Integer> weightsFrequencies;
-
     private int numberOfValidPathInQueue;
 
 
@@ -120,7 +146,7 @@ public class YenShortestPathIterator<V, E>
      * @param graph         graph
      * @param source        source vertex
      * @param sink          sink vertex
-     * @param pathValidator validator to be used while paths construction
+     * @param pathValidator validator to computed paths
      */
     public YenShortestPathIterator(Graph<V, E> graph, V source, V sink, PathValidator<V, E> pathValidator) {
         this(graph, source, sink, PairingHeap::new, pathValidator);
@@ -135,7 +161,7 @@ public class YenShortestPathIterator<V, E>
      * @param source        source vertex
      * @param sink          sink vertex
      * @param heapSupplier  supplier of the preferable heap implementation
-     * @param pathValidator validator to be used while paths construction
+     * @param pathValidator validator for computed paths
      */
     public YenShortestPathIterator(
             Graph<V, E> graph, V source, V sink,
@@ -157,7 +183,6 @@ public class YenShortestPathIterator<V, E>
         this.candidatePaths = heapSupplier.get();
         this.firstDeviations = new HashMap<>();
         this.lastDeviations = new HashMap<>();
-        this.weightsFrequencies = new HashMap<>();
 
         GraphPath<V, E> shortestPath = DijkstraShortestPath.findPathBetween(graph, source, sink);
 
@@ -170,7 +195,6 @@ public class YenShortestPathIterator<V, E>
             lastDeviations.put(shortestPath, lastValidDeviation);
 
             if(shortestPathIsValid){
-                weightsFrequencies.put(shortestPath.getWeight(), 1);
                 ++numberOfValidPathInQueue;
             }
 
@@ -178,18 +202,30 @@ public class YenShortestPathIterator<V, E>
         }
     }
 
+    /**
+     * This method is used to make sure that there exist at least one valid path
+     * on the queue. During the iteration if the candidates queue is not empty
+     * then the iterator has next value. Otherwise is does not.
+     */
     private void ensureAtLeastOneValidPathInQueue() {
         while(numberOfValidPathInQueue == 0 && !candidatePaths.isEmpty()){
             Pair<GraphPath<V,E>, Boolean> p = candidatePaths.deleteMin().getValue();
             GraphPath<V,E> currentPath = p.getFirst();
-            boolean isValid = p.getSecond();
             resultList.add(currentPath);
             int numberOfValidDeviations = addDeviations(currentPath);
             numberOfValidPathInQueue += numberOfValidDeviations;
         }
     }
 
-
+    /**
+     * Computes vertex $u$ such that $pathValidator#isValidPath([start_vertex, u], (u,v)) = false$,
+     * where $[start_vertex, u]$ denotes the subpath of $P$ from its start to vertex $u$ and $v$ is
+     * the next vertex in $P$ after $u$. Returns null if there is no such vertex.
+     *
+     * @param path           graph path
+     * @param firstDeviation vertex at which {@code path} deviates from its parent path
+     * @return vertex which is last valid deviation for {@code path}
+     */
     private V getLastValidDeviation(GraphPath<V,E> path, V firstDeviation){
         if(pathValidator == null){
             return null;
@@ -258,8 +294,12 @@ public class YenShortestPathIterator<V, E>
      * Builds unique loopless deviations from the given path in the {@code graph}. First receives
      * the deviation vertex of the current path as well as sets of vertices and edges to be masked
      * during the computations. Then creates an instance of the {@link MaskSubgraph} and builds a
-     * reversed shortest paths tree starting at {@code sink} in it. Finally builds new paths by
-     * deviating from the vertices of the provided {@code path}.
+     * reversed shortest paths tree starting at {@code sink} in it. Finally builds new candidate paths
+     * by deviating from the vertices of the provided {@code path}. Puts only those candidates in
+     * the {@code candidatesList}, which deviate from {@code path} between $firstDeviation$ and
+     * $lastDeviation$. $firstDeviation$ and $lastDeviation$ are obtainer from {@code firstDeviations}
+     * and {@code lastDeviations} correspondingly.
+     *
      * <p>
      * For more information on this step refer to the article with the original description of the
      * algorithm.
@@ -334,12 +374,6 @@ public class YenShortestPathIterator<V, E>
 
                     if (candidateIsValid) {
                         ++result;
-                        if (weightsFrequencies.containsKey(candidateWeight)) {
-                            weightsFrequencies
-                                    .computeIfPresent(candidateWeight, (weight, frequency) -> frequency + 1);
-                        } else {
-                            weightsFrequencies.put(candidateWeight, 1);
-                        }
                     }
                 }
             }

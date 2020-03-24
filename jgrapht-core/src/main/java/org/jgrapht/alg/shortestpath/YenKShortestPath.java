@@ -19,8 +19,6 @@ package org.jgrapht.alg.shortestpath;
 
 import org.jgrapht.*;
 import org.jgrapht.alg.interfaces.*;
-import org.jgrapht.alg.util.Pair;
-import org.jheaps.*;
 
 import java.util.*;
 
@@ -38,15 +36,14 @@ import java.util.*;
  *
  * <p>
  * The implementation iterates over the existing loopless path between the {@code source} and the
- * {@code sink} and forms the resulting list. During the execution the algorithm keeps track of how
- * many candidates with minimum weight exist. If the number is greater or equal to the number of
- * path needed to complete the execution, the algorithm retrieves the rest of the path from the
- * candidates heap and adds them to the resulting list.
+ * {@code sink} and forms the resulting list. It is possible to provide validation for paths, which
+ * will be computed, using the {@link PathValidator}.
  *
  * @param <V> the graph vertex type
  * @param <E> the graph edge type
  * @author Semen Chudakov
  * @see YenShortestPathIterator
+ * @see PathValidator
  */
 public class YenKShortestPath<V, E>
     implements
@@ -57,6 +54,10 @@ public class YenKShortestPath<V, E>
      */
     private final Graph<V, E> graph;
 
+    /**
+     * Provides validation for the paths which will be computed. Is the validator
+     * is $null$, this means that all paths are valid.
+     */
     private PathValidator<V,E> pathValidator;
 
     /**
@@ -74,6 +75,7 @@ public class YenKShortestPath<V, E>
      * and {@code pathValidator}.
      *
      * @param graph graph
+     * @param pathValidator validator for computed paths
      */
     public YenKShortestPath(Graph<V, E> graph, PathValidator<V,E> pathValidator)
     {

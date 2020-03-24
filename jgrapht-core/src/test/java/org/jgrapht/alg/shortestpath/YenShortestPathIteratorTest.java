@@ -402,7 +402,8 @@ public class YenShortestPathIteratorTest
     }
 
     @Test
-    public void testForbidAll(){
+    public void testForbidAll()
+    {
         Graph<Integer, DefaultWeightedEdge> graph = new WeightedPseudograph<>(DefaultWeightedEdge.class);
         readGraph(graph, pseudograph1);
         Integer source = 1;
@@ -413,7 +414,8 @@ public class YenShortestPathIteratorTest
     }
 
     @Test
-    public void testNonTrivialPathValidator(){
+    public void testNonTrivialPathValidator()
+    {
         Graph<Integer, DefaultWeightedEdge> graph = new DirectedWeightedPseudograph<>(DefaultWeightedEdge.class);
         readGraph(graph, pseudograph3);
         Integer source = 1;
@@ -542,11 +544,19 @@ public class YenShortestPathIteratorTest
         graph.edgeSet().forEach(e -> graph.setEdgeWeight(e, random.nextInt(10)));
     }
 
+    /**
+     * Computes a set of random vertices of {@code graph}. The size of the
+     * set is {@code numberOfEdges}.
+     *
+     * @param graph a graph
+     * @param numberOfEdges number of random vertices
+     * @return set of random vertices
+     */
     private Set<DefaultWeightedEdge> getRandomEdges(Graph<Integer, DefaultWeightedEdge> graph, int numberOfEdges) {
         Set<DefaultWeightedEdge> result = CollectionUtil.newHashSetWithExpectedSize(numberOfEdges);
         Object[] edges =  graph.edgeSet().toArray();
         Random random = new Random(SEED);
-        while (result.size() != numberOfEdges){
+        while (result.size() != numberOfEdges) {
             result.add((DefaultWeightedEdge) edges[random.nextInt(edges.length)]);
         }
         return result;
