@@ -42,7 +42,7 @@ public class YenShortestPathIteratorTest
      * Seed value which is used to generate random graphs by
      * {@code getRandomGraph(Graph, int, double)} method.
      */
-    private static final long SEED = 13l;
+    private static final long SEED = 13L;
     /**
      * Number of path to iterate over for each random graph in the
      * {@code testOnRandomGraph(Graph, Integer, Integer)} method.
@@ -403,12 +403,12 @@ public class YenShortestPathIteratorTest
         Integer target = 3;
         PathValidator<Integer,DefaultWeightedEdge> validator = (partialPath, edge) -> {
             if (graph.getEdgeSource(edge).equals(1) &&
-                    graph.getEdgeSource(edge).equals(2) &&
+                    graph.getEdgeTarget(edge).equals(2) &&
                     graph.getEdgeWeight(edge) == 2.0){
                 return false;
             }
             if (graph.getEdgeSource(edge).equals(2) &&
-                    graph.getEdgeSource(edge).equals(3) &&
+                    graph.getEdgeTarget(edge).equals(3) &&
                     graph.getEdgeWeight(edge) == 4.0){
                 return false;
             }

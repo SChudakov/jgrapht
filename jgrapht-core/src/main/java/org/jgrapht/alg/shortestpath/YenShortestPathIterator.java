@@ -17,14 +17,28 @@
  */
 package org.jgrapht.alg.shortestpath;
 
-import org.jgrapht.*;
-import org.jgrapht.alg.util.*;
-import org.jgrapht.graph.*;
-import org.jheaps.*;
-import org.jheaps.tree.*;
+import org.jgrapht.Graph;
+import org.jgrapht.GraphPath;
+import org.jgrapht.Graphs;
+import org.jgrapht.alg.util.Pair;
+import org.jgrapht.graph.EdgeReversedGraph;
+import org.jgrapht.graph.GraphWalk;
+import org.jgrapht.graph.MaskSubgraph;
+import org.jheaps.AddressableHeap;
+import org.jheaps.tree.PairingHeap;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Iterator over the shortest loopless paths between two vertices in a graph sorted by weight.
@@ -189,12 +203,13 @@ public class YenShortestPathIterator<V, E>
         if (shortestPath != null) {
             boolean shortestPathIsValid = lastValidDeviation == null;
             if(shortestPathIsValid){
+                weightsFrequencies.put(shortestPath.getWeight(), 1);
                 ++numberOfValidPathInQueue;
             }
+
             candidatePaths.insert(shortestPath.getWeight(), Pair.of(shortestPath, shortestPathIsValid));
             firstDeviations.put(shortestPath, source);
             lastDeviations.put(shortestPath, lastValidDeviation);
-            weightsFrequencies.put(shortestPath.getWeight(), 1);
 
             ensureAtLeastOneValidPathInQueue();
         }
@@ -203,6 +218,7 @@ public class YenShortestPathIterator<V, E>
     private void ensureAtLeastOneValidPathInQueue() {
         while(numberOfValidPathInQueue == 0 && !candidatePaths.isEmpty()){
             GraphPath<V,E> currentPath = candidatePaths.deleteMin().getValue().getFirst();
+            processPath(currentPath, false);
             int numberOfValidDeviations = addDeviations(currentPath);
             numberOfValidPathInQueue += numberOfValidDeviations;
         }
@@ -260,9 +276,10 @@ public class YenShortestPathIterator<V, E>
 
             if(isValid){
                 result = path;
-                processPath(path);
                 --numberOfValidPathInQueue;
             }
+
+            processPath(path, isValid);
 
             int numberOfValidDeviations = addDeviations(path);
             numberOfValidPathInQueue += numberOfValidDeviations;
@@ -272,21 +289,24 @@ public class YenShortestPathIterator<V, E>
         return result;
     }
 
-    void processPath(GraphPath<V,E> path){
+    void processPath(GraphPath<V,E> path, boolean isValid){
         resultList.add(path);
 
-        double pathWeight = path.getWeight();
-        int minWeightFrequency = weightsFrequencies.get(pathWeight);
-        if (minWeightFrequency == 1) {
-            weightsFrequencies.remove(pathWeight);
-            if (candidatePaths.isEmpty()) {
-                numberOfValidCandidatesWithMinimumWeight = 0;
+        if (isValid){
+            double pathWeight = path.getWeight();
+            int minWeightFrequency = weightsFrequencies.get(pathWeight);
+            if (minWeightFrequency == 1) {
+                weightsFrequencies.remove(pathWeight);
+                if (candidatePaths.isEmpty()) {
+                    numberOfValidCandidatesWithMinimumWeight = 0;
+                } else {
+                    double minimumWeight = candidatePaths.findMin().getKey();
+                    numberOfValidCandidatesWithMinimumWeight
+                            = weightsFrequencies.getOrDefault(minimumWeight, 0);
+                }
             } else {
-                numberOfValidCandidatesWithMinimumWeight =
-                        weightsFrequencies.get(candidatePaths.findMin().getKey());
+                weightsFrequencies.put(pathWeight, minWeightFrequency - 1);
             }
-        } else {
-            weightsFrequencies.put(pathWeight, minWeightFrequency - 1);
         }
     }
 
@@ -344,7 +364,7 @@ public class YenShortestPathIterator<V, E>
 
         // build spur paths by iteratively recovering vertices of the current path
         boolean proceed = true;
-        for (int i = lastDeviationIndex; i >= 0 && proceed; i--) {
+        for (int i = pathVerticesSize - 2; i >= 0 && proceed; i--) {
             V recoverVertex = pathVertices.get(i);
             if (recoverVertex.equals(pathDeviation)) {
                 proceed = false;
@@ -359,22 +379,24 @@ public class YenShortestPathIterator<V, E>
             if (spurPath != null) {
                 customTree.correctDistanceBackward(recoverVertex);
 
-                GraphPath<V, E> candidate = getCandidatePath(path, i, spurPath);
-                double candidateWeight = candidate.getWeight();
-                V candidateLastDeviation = getLastValidDeviation(candidate, recoverVertex);
-                boolean candidateIsValid = candidateLastDeviation == null;
+                if (i <= lastDeviationIndex) { // candidate path can be valid
+                    GraphPath<V, E> candidate = getCandidatePath(path, i, spurPath);
+                    double candidateWeight = candidate.getWeight();
+                    V candidateLastDeviation = getLastValidDeviation(candidate, recoverVertex);
+                    boolean candidateIsValid = candidateLastDeviation == null;
 
-                candidatePaths.insert(candidateWeight, Pair.of(candidate, candidateIsValid));
-                firstDeviations.put(candidate, recoverVertex);
-                lastDeviations.put(candidate, candidateLastDeviation);
+                    candidatePaths.insert(candidateWeight, Pair.of(candidate, candidateIsValid));
+                    firstDeviations.put(candidate, recoverVertex);
+                    lastDeviations.put(candidate, candidateLastDeviation);
 
-                if (candidateIsValid) {
-                    ++result;
-                    if (weightsFrequencies.containsKey(candidateWeight)) {
-                        weightsFrequencies
-                                .computeIfPresent(candidateWeight, (weight, frequency) -> frequency + 1);
-                    } else {
-                        weightsFrequencies.put(candidateWeight, 1);
+                    if (candidateIsValid) {
+                        ++result;
+                        if (weightsFrequencies.containsKey(candidateWeight)) {
+                            weightsFrequencies
+                                    .computeIfPresent(candidateWeight, (weight, frequency) -> frequency + 1);
+                        } else {
+                            weightsFrequencies.put(candidateWeight, 1);
+                        }
                     }
                 }
             }
