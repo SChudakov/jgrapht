@@ -24,6 +24,7 @@ import org.jgrapht.alg.interfaces.KShortestPathAlgorithm;
 import org.jgrapht.graph.*;
 import org.junit.*;
 
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertTrue;
@@ -33,26 +34,39 @@ public class KSPDiscardsValidPathsTest
 {
     // ~ Methods ----------------------------------------------------------------
 
-    private int[][] pseudograph1 = {{0, 2, 2}, {3, 0, 0}, {0, 7, 5}, {12, 0, 8}, {19, 0, 3}, {0, 20, 0}, {0, 23, 3},
-            {1, 7, 3}, {1, 8, 6}, {13, 1, 4}, {18, 1, 0}, {1, 19, 6}, {2, 14, 5}, {2, 17, 5}, {23, 2, 2}, {2, 24, 4},
-            {24, 2, 4}, {3, 7, 9}, {3, 11, 0}, {12, 3, 4}, {3, 13, 3}, {3, 15, 8}, {3, 22, 2}, {5, 4, 9}, {4, 11, 0},
-            {17, 4, 7}, {4, 22, 4}, {5, 17, 2}, {7, 6, 0}, {6, 11, 5}, {6, 19, 1}, {7, 9, 8}, {10, 7, 3}, {7, 11, 5},
-            {14, 7, 4}, {21, 7, 1}, {11, 8, 8}, {8, 16, 7}, {8, 20, 9}, {8, 23, 8}, {23, 8, 0}, {9, 10, 3}, {9, 15, 1},
-            {15, 9, 0}, {9, 23, 7}, {23, 9, 6}, {13, 10, 8}, {22, 11, 3}, {23, 11, 6}, {12, 14, 1}, {13, 15, 1},
-            {13, 16, 0}, {13, 22, 3}, {22, 13, 2}, {14, 22, 5}, {16, 15, 2}, {16, 17, 9}, {23, 16, 1}, {17, 21, 5},
-            {17, 24, 8}, {20, 22, 5}, {23, 20, 2}, {21, 23, 7}};
+    private int[][] pseudograph1 = {
+            {0, 2, 2}, {0, 7, 5}, {0, 11, 8}, {0, 12, 3},
+            {1, 8, 6}, {1, 10, 4}, {1, 11, 0},
+            {2, 1, 3}, {2, 7, 2}, {2, 8, 4}, {2, 9, 4},
+            {3, 0, 0}, {3, 5, 4}, {3, 7, 8}, {3, 9, 0}, {3, 12, 7},
+            {5, 3, 3}, {5, 9, 5}, {5, 12, 8}, {5, 13, 3},
+            {6, 9, 5}, {6, 10, 4}, {6, 11, 1}, {6, 12, 7},
+            {7, 1, 3}, {7, 3, 2}, {7, 10, 0},
+            {8, 3, 9}, {8, 9, 3}, {8, 11, 0}, {8, 13, 7},
+            {9, 7, 8}, {9, 10, 6}, {9, 11, 3},
+            {10, 4, 2}, {10, 8, 1}, {10, 9, 8}, {10, 13, 1},
+            {11, 1, 6}, {11, 2, 9}, {11, 5, 1}, {11, 6, 8}, {11, 10, 6}, {11, 13, 1},
+            {12, 0, 0}, {12, 1, 5}, {12, 4, 0}, {12, 6, 9},
+            {13, 1, 5}, {13, 2, 0}, {13, 3, 4}, {13, 12, 0}
+    };
 
     @Test
     public void testPseudograph1() {
         Graph<Integer, DefaultWeightedEdge> graph = new SimpleDirectedWeightedGraph<>(DefaultWeightedEdge.class);
         readGraph(graph, pseudograph1);
-        int source = 2;
+        int source = 12;
         int target = 6;
         int k = 100;
-        KShortestPathAlgorithm<Integer, DefaultWeightedEdge> algorithm = new KShortestSimplePaths<>(graph);
+        List<Integer> expectedVertices = Arrays.asList(12, 0, 7, 10, 13, 2, 1, 8, 9, 11, 6);
 
+        KShortestPathAlgorithm<Integer, DefaultWeightedEdge> algorithm = new KShortestSimplePaths<>(graph);
         List<GraphPath<Integer, DefaultWeightedEdge>> paths = algorithm.getPaths(source, target, k);
-        assertEquals(paths.size(), 86);
+        for (int i = 0; i < 89; ++i) {
+            System.out.println(i + ")\t" + paths.get(i).getWeight() + "\t" + paths.get(i).getVertexList());
+        }
+
+//        assertEquals(29.0, paths.get(88).getWeight(), 1e-9);
+        assertEquals(expectedVertices, paths.get(88).getVertexList());
     }
 
     private void readGraph(Graph<Integer, DefaultWeightedEdge> graph, int[][] representation) {
