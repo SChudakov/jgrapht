@@ -35,6 +35,7 @@ final class RankingPathElement<V, E>
      * Weight of the path.
      */
     private double weight;
+    private double toTargetWeight;
 
     private Graph<V, E> graph;
 
@@ -46,11 +47,12 @@ final class RankingPathElement<V, E>
      * @param weight total cost of the created path element.
      */
     RankingPathElement(
-        Graph<V, E> graph, RankingPathElement<V, E> pathElement, E edge, double weight)
+            Graph<V, E> graph, RankingPathElement<V, E> pathElement, E edge, double weight, double toTargetWeight)
     {
         super(graph, pathElement, edge);
-        this.weight = weight;
         this.graph = graph;
+        this.weight = weight;
+        this.toTargetWeight = toTargetWeight;
     }
 
     /**
@@ -58,10 +60,11 @@ final class RankingPathElement<V, E>
      *
      * @param vertex end vertex of the path element.
      */
-    RankingPathElement(V vertex)
+    RankingPathElement(V vertex, double weight, double toTargetWeight)
     {
         super(vertex);
-        this.weight = 0;
+        this.weight = weight;
+        this.toTargetWeight = toTargetWeight;
     }
 
     /**
@@ -69,9 +72,15 @@ final class RankingPathElement<V, E>
      *
      * @return .
      */
+    @Override
     public double getWeight()
     {
         return this.weight;
+    }
+
+    public double getToTargetWeight()
+    {
+        return this.toTargetWeight;
     }
 
     /**

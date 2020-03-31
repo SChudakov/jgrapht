@@ -17,11 +17,19 @@
  */
 package org.jgrapht.alg.shortestpath;
 
-import org.jgrapht.*;
-import org.jgrapht.alg.connectivity.*;
-import org.jgrapht.graph.*;
+import org.jgrapht.Graph;
+import org.jgrapht.GraphPath;
+import org.jgrapht.Graphs;
+import org.jgrapht.alg.connectivity.ConnectivityInspector;
+import org.jgrapht.graph.GraphWalk;
+import org.jgrapht.graph.MaskSubgraph;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * List of simple paths in increasing order of weight.
@@ -130,12 +138,28 @@ final class RankingPathElementList<V, E>
             }
 
             double weight = calculatePathWeight(prevPathElement, edge);
+
+            PathMask<V,E> pathMask = new PathMask<>(prevPathElement);
+            Graph<V, E> maskSubGraph = new MaskSubgraph<>(graph, pathMask::isVertexMasked, pathMask::isEdgeMasked);
+            GraphPath<V, E> toTargetPath = DijkstraShortestPath.findPathBetween(maskSubGraph, vertex, guardVertexToNotDisconnect);
+            double toTargetWeight;
+            if (toTargetPath == null) {
+                continue;
+            } else {
+                toTargetWeight = toTargetPath.getWeight();
+            }
+
             RankingPathElement<V, E> newPathElement =
-                new RankingPathElement<>(this.graph, prevPathElement, edge, weight);
+                new RankingPathElement<>(this.graph, prevPathElement, edge, weight, toTargetWeight);
 
             // the new path is inserted at the end of the list.
             this.pathElements.add(newPathElement);
         }
+        pathElements.sort((e1, e2) -> {
+            double e1TotalWeight = e1.getWeight() + e1.getToTargetWeight();
+            double e2TotalWeight = e2.getWeight() + e2.getToTargetWeight();
+            return Double.compare(e1TotalWeight, e2TotalWeight);
+        });
     }
 
     /**
@@ -203,18 +227,31 @@ final class RankingPathElementList<V, E>
                 continue;
             }
             double newPathWeight = calculatePathWeight(prevPathElement, edge);
+            PathMask<V,E> pathMask = new PathMask<>(prevPathElement);
+            Graph<V, E> maskSubGraph = new MaskSubgraph<>(graph, pathMask::isVertexMasked, pathMask::isEdgeMasked);
+            GraphPath<V, E> toTargetPath = DijkstraShortestPath.findPathBetween(maskSubGraph, vertex, guardVertexToNotDisconnect);
+            double toTargetWeight;
+            if (toTargetPath == null) {
+                continue;
+            } else {
+                toTargetWeight = toTargetPath.getWeight();
+            }
+
             RankingPathElement<V, E> newPathElement =
-                new RankingPathElement<>(this.graph, prevPathElement, edge, newPathWeight);
+                new RankingPathElement<>(this.graph, prevPathElement, edge, newPathWeight, toTargetWeight);
 
             // loop over the paths of the list at vertex y from yIndex to the
             // end.
             RankingPathElement<V, E> yPathElement = null;
+            double prevTotalWeight = newPathWeight + toTargetWeight;
+            double yPathTotalWeight = Double.POSITIVE_INFINITY;
             for (; yIndex < size(); yIndex++) {
                 yPathElement = get(yIndex);
+                yPathTotalWeight = yPathElement.getWeight() + yPathElement.getToTargetWeight();
 
                 // case when the new path is shorter than the path Py stored at
                 // index y
-                if (newPathWeight < yPathElement.getWeight()) {
+                if (prevTotalWeight < yPathTotalWeight) {
                     this.pathElements.add(yIndex, newPathElement);
                     pathAdded = true;
 
@@ -227,7 +264,7 @@ final class RankingPathElementList<V, E>
 
                 // case when the new path is of the same length as the path Py
                 // stored at index y
-                if (newPathWeight == yPathElement.getWeight()) {
+                if (prevTotalWeight == yPathTotalWeight) {
                     this.pathElements.add(yIndex + 1, newPathElement);
                     pathAdded = true;
 
@@ -241,7 +278,7 @@ final class RankingPathElementList<V, E>
 
             // case when the new path is longer than the longest path in the
             // list (Py stored at the last index y)
-            if (newPathWeight > yPathElement.getWeight()) {
+            if (prevTotalWeight > yPathTotalWeight) {
                 // ensures max size limit is not exceeded.
                 if (size() < this.maxSize) {
                     // the new path is inserted at the end of the list.
@@ -304,12 +341,13 @@ final class RankingPathElementList<V, E>
             return this.path2disconnect.get(prevPathElement);
         }
 
-        ConnectivityInspector<V, E> connectivityInspector;
+
         PathMask<V, E> connectivityMask = new PathMask<>(prevPathElement);
 
-        MaskSubgraph<V, E> connectivityGraph = new MaskSubgraph<>(
-            this.graph, connectivityMask::isVertexMasked, connectivityMask::isEdgeMasked);
-        connectivityInspector = new ConnectivityInspector<>(connectivityGraph);
+        MaskSubgraph<V, E> connectivityGraph = new MaskSubgraph<>(this.graph,
+                connectivityMask::isVertexMasked, connectivityMask::isEdgeMasked);
+        ConnectivityInspector<V, E> connectivityInspector
+                = new ConnectivityInspector<>(connectivityGraph);
 
         if (connectivityMask.isVertexMasked(this.guardVertexToNotDisconnect)) {
             // the guard-vertex was already in the path element -> invalid path

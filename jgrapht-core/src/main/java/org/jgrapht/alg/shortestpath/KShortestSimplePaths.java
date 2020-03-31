@@ -147,6 +147,7 @@ public class KShortestSimplePaths<V, E>
          * at the i-th pass the shortest paths with less (or equal) than i edges are calculated
          */
         for (int passNumber = 1; (passNumber <= nMaxHops) && iter.hasNext(); passNumber++) {
+            System.out.println("pass number: " + passNumber);
             iter.next();
         }
 

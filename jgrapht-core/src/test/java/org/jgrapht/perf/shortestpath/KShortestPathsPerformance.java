@@ -3,6 +3,7 @@ package org.jgrapht.perf.shortestpath;
 import org.jgrapht.Graph;
 import org.jgrapht.GraphPath;
 import org.jgrapht.alg.interfaces.KShortestPathAlgorithm;
+import org.jgrapht.alg.shortestpath.KShortestSimplePath;
 import org.jgrapht.alg.shortestpath.KShortestSimplePaths;
 import org.jgrapht.alg.shortestpath.PathValidator;
 import org.jgrapht.alg.shortestpath.YenKShortestPath;
@@ -39,14 +40,19 @@ import java.util.concurrent.TimeUnit;
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class KShortestPathsPerformance {
 
-    @Benchmark
+//    @Benchmark
     public List<List<GraphPath<Integer, DefaultWeightedEdge>>> testYenKShortestPaths(RandomGraphState state) {
         return computeResult(new YenKShortestPath<>(state.graph, state.pathValidator), state);
     }
 
-    @Benchmark
+//    @Benchmark
     public List<List<GraphPath<Integer, DefaultWeightedEdge>>> testKShortestSimplePaths(RandomGraphState state) {
         return computeResult(new KShortestSimplePaths<>(state.graph, state.pathValidator), state);
+    }
+
+    @Benchmark
+    public List<List<GraphPath<Integer, DefaultWeightedEdge>>> testKShortestSimplePath(RandomGraphState state) {
+        return computeResult(new KShortestSimplePath<>(state.graph, state.pathValidator), state);
     }
 
     private List<List<GraphPath<Integer, DefaultWeightedEdge>>> computeResult(
