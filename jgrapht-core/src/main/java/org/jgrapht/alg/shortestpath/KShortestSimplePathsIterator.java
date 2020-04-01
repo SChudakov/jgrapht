@@ -17,16 +17,9 @@
  */
 package org.jgrapht.alg.shortestpath;
 
-import org.jgrapht.Graph;
-import org.jgrapht.Graphs;
+import org.jgrapht.*;
 
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Helper class for {@link KShortestSimplePaths}.
@@ -236,9 +229,8 @@ class KShortestSimplePathsIterator<V, E>
      */
     private void encounterStartVertex()
     {
-        double shortestPathWeight = DijkstraShortestPath.findPathBetween(graph, startVertex, endVertex).getWeight();
         RankingPathElementList<V, E> data = new RankingPathElementList<>(
-            this.graph, this.k, new RankingPathElement<>(this.startVertex, 0.0, shortestPathWeight), this.pathValidator);
+            this.graph, this.k, new RankingPathElement<>(this.startVertex), this.pathValidator);
 
         this.seenDataContainer.put(this.startVertex, data);
         this.prevSeenDataContainer.put(this.startVertex, data);
@@ -264,12 +256,6 @@ class KShortestSimplePathsIterator<V, E>
                     improvedPaths.pathElements.add(path);
                 }
             }
-
-            improvedPaths.pathElements.sort((e1, e2) -> {
-                double e1TotalWeight = e1.getWeight() + e1.getToTargetWeight();
-                double e2TotalWeight = e2.getWeight() + e2.getToTargetWeight();
-                return Double.compare(e1TotalWeight, e2TotalWeight);
-            });
 
             this.prevSeenDataContainer.put(vertex, improvedPaths);
         }
