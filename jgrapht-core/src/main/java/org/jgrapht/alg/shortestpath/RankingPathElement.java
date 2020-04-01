@@ -22,7 +22,7 @@ import org.jgrapht.*;
 import java.util.*;
 
 /**
- * Helper class for {@link KShortestPaths}.
+ * Helper class for {@link KShortestSimplePaths}.
  *
  */
 final class RankingPathElement<V, E>
@@ -36,6 +36,8 @@ final class RankingPathElement<V, E>
      */
     private double weight;
 
+    private double priority;
+
     private Graph<V, E> graph;
 
     /**
@@ -46,10 +48,11 @@ final class RankingPathElement<V, E>
      * @param weight total cost of the created path element.
      */
     RankingPathElement(
-        Graph<V, E> graph, RankingPathElement<V, E> pathElement, E edge, double weight)
+        Graph<V, E> graph, RankingPathElement<V, E> pathElement, E edge, double weight, double priority)
     {
         super(graph, pathElement, edge);
         this.weight = weight;
+        this.priority = priority;
         this.graph = graph;
     }
 
@@ -58,10 +61,11 @@ final class RankingPathElement<V, E>
      *
      * @param vertex end vertex of the path element.
      */
-    RankingPathElement(V vertex)
+    RankingPathElement(V vertex, double priority)
     {
         super(vertex);
         this.weight = 0;
+        this.priority = priority;
     }
 
     /**
@@ -72,6 +76,10 @@ final class RankingPathElement<V, E>
     public double getWeight()
     {
         return this.weight;
+    }
+
+    public double getPriority() {
+        return priority;
     }
 
     /**

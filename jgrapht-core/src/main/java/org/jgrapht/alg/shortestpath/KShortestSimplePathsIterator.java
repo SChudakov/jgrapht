@@ -17,9 +17,16 @@
  */
 package org.jgrapht.alg.shortestpath;
 
-import org.jgrapht.*;
+import org.jgrapht.Graph;
+import org.jgrapht.GraphPath;
+import org.jgrapht.Graphs;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
 
 /**
  * Helper class for {@link KShortestSimplePaths}.
@@ -229,8 +236,15 @@ class KShortestSimplePathsIterator<V, E>
      */
     private void encounterStartVertex()
     {
+        GraphPath<V, E> graphPath = DijkstraShortestPath.findPathBetween(graph, startVertex, endVertex);
+        double startVertexPriority;
+        if (graphPath == null) {
+            startVertexPriority = Double.POSITIVE_INFINITY;
+        } else {
+            startVertexPriority = graphPath.getWeight();
+        }
         RankingPathElementList<V, E> data = new RankingPathElementList<>(
-            this.graph, this.k, new RankingPathElement<>(this.startVertex), this.pathValidator);
+            this.graph, this.k, new RankingPathElement<>(this.startVertex, startVertexPriority), this.pathValidator);
 
         this.seenDataContainer.put(this.startVertex, data);
         this.prevSeenDataContainer.put(this.startVertex, data);

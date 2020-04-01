@@ -22,7 +22,6 @@ import org.jgrapht.GraphPath;
 import org.jgrapht.Graphs;
 import org.jgrapht.alg.interfaces.KShortestPathAlgorithm;
 import org.jgrapht.graph.DefaultWeightedEdge;
-import org.jgrapht.graph.GraphWalk;
 import org.jgrapht.graph.MaskSubgraph;
 import org.jgrapht.graph.SimpleDirectedWeightedGraph;
 import org.jgrapht.graph.WeightedMultigraph;
@@ -62,18 +61,26 @@ public class KSPDiscardsValidPathsTest {
     public void testSimpleGraph1() {
         Graph<Integer, DefaultWeightedEdge> graph = new SimpleDirectedWeightedGraph<>(DefaultWeightedEdge.class);
         readGraph(graph, simpleGraph1);
+
         int source = 12;
         int target = 6;
         int k = Integer.MAX_VALUE;
-        KShortestPathAlgorithm<Integer, DefaultWeightedEdge> algorithm = new KShortestSimplePaths<>(graph);
-        List<GraphPath<Integer, DefaultWeightedEdge>> paths = algorithm.getPaths(source, target, k);
 
-        for (int i = 0; i < paths.size(); ++i) {
-            GraphPath<Integer, DefaultWeightedEdge> path = paths.get(i);
+        KShortestPathAlgorithm<Integer, DefaultWeightedEdge> kssp = new KShortestSimplePaths<>(graph);
+        List<GraphPath<Integer, DefaultWeightedEdge>> actualPaths = kssp.getPaths(source, target, k);
+        KShortestPathAlgorithm<Integer, DefaultWeightedEdge> yen = new YenKShortestPath<>(graph);
+        List<GraphPath<Integer, DefaultWeightedEdge>> expectedPaths = yen.getPaths(source, target, k);
 
-            List<Integer> vertices = path.getVertexList();
-            double weight = path.getWeight();
+        assertEquals(expectedPaths.size(), actualPaths.size());
+        for (int i = 0; i < actualPaths.size(); ++i) {
+            GraphPath<Integer, DefaultWeightedEdge> expected = expectedPaths.get(i);
+            GraphPath<Integer, DefaultWeightedEdge> actual = actualPaths.get(i);
+
+            List<Integer> vertices = actual.getVertexList();
+            double weight = actual.getWeight();
             System.out.println(i + ")\t" + weight + "\t" + vertices);
+
+            assertEquals(expected.getWeight(), actual.getWeight(), 1e-9);
         }
     }
 
@@ -88,28 +95,29 @@ public class KSPDiscardsValidPathsTest {
         int k = 100;
 
         List<Integer> expectedVertices = Arrays.asList(12, 0, 7, 10, 13, 2, 1, 8, 9, 11, 6);
-//        List<DefaultWeightedEdge> expectedEdges = new ArrayList<>();
-//        double expectedWeight = 0.0;
-//        for (int i = 0; i < expectedVertices.size() - 1; ++i) {
-//            DefaultWeightedEdge edge = graph.getEdge(expectedVertices.get(i), expectedVertices.get(i + 1));
-//            expectedEdges.add(edge);
-//            expectedWeight += graph.getEdgeWeight(edge);
-//        }
+        List<DefaultWeightedEdge> expectedEdges = new ArrayList<>();
+        double expectedWeight = 0.0;
+        for (int i = 0; i < expectedVertices.size() - 1; ++i) {
+            DefaultWeightedEdge edge = graph.getEdge(expectedVertices.get(i), expectedVertices.get(i + 1));
+            expectedEdges.add(edge);
+            expectedWeight += graph.getEdgeWeight(edge);
+        }
+
 //        GraphWalk<Integer, DefaultWeightedEdge> walk = new GraphWalk<>(graph, 12, 6, expectedEdges, expectedWeight);
 //        walk.verify();
 
-//        List<Integer> verticesSublist = Arrays.asList(12, 0, 7, 10, 13, 2, 1);
-//        PathValidator<Integer, DefaultWeightedEdge> validator = (path, edge) -> {
-//            if (graph.getEdgeSource(edge).equals(1) && graph.getEdgeTarget(edge).equals(8)) {
-//                if (path.getVertexList().equals(verticesSublist)) {
-//                    System.out.println("needed path");
-//                    System.out.println(edge);
-//                }
-//            }
-//            return true;
-//        };
+        List<Integer> verticesSublist = Arrays.asList(12, 0, 7, 10, 13);
+        PathValidator<Integer, DefaultWeightedEdge> validator = (path, edge) -> {
+            if (graph.getEdgeSource(edge).equals(13) && graph.getEdgeTarget(edge).equals(2)) {
+                if (path.getVertexList().equals(verticesSublist)) {
+                    System.out.println("needed path");
+                    System.out.println(edge);
+                }
+            }
+            return true;
+        };
 
-        KShortestPathAlgorithm<Integer, DefaultWeightedEdge> algorithm = new KShortestSimplePaths<>(graph);
+        KShortestPathAlgorithm<Integer, DefaultWeightedEdge> algorithm = new KShortestSimplePaths<>(graph, validator);
         List<GraphPath<Integer, DefaultWeightedEdge>> paths = algorithm.getPaths(source, target, k);
 
         for (int i = 0; i < k; ++i) {

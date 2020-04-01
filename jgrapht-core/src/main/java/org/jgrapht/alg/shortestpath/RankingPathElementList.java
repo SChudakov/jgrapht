@@ -17,11 +17,18 @@
  */
 package org.jgrapht.alg.shortestpath;
 
-import org.jgrapht.*;
-import org.jgrapht.alg.connectivity.*;
-import org.jgrapht.graph.*;
+import org.jgrapht.Graph;
+import org.jgrapht.GraphPath;
+import org.jgrapht.Graphs;
+import org.jgrapht.graph.GraphWalk;
+import org.jgrapht.graph.MaskSubgraph;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * List of simple paths in increasing order of weight.
@@ -36,8 +43,7 @@ final class RankingPathElementList<V, E>
      */
     private V guardVertexToNotDisconnect = null;
 
-    private Map<RankingPathElement<V, E>, Boolean> path2disconnect =
-        new HashMap<RankingPathElement<V, E>, Boolean>();
+    private Map<RankingPathElement<V, E>, Double> elementToSpurPathDistance = new HashMap<>();
 
     /**
      * To be used on top of general path validations. May invalidate the path though they pass the
@@ -130,8 +136,13 @@ final class RankingPathElementList<V, E>
             }
 
             double weight = calculatePathWeight(prevPathElement, edge);
+            double spurPathDistance = getSpurPathDistance(prevPathElement);
+            if(spurPathDistance == Double.POSITIVE_INFINITY){
+                continue;
+            }
+            double newPathPriority = weight + spurPathDistance;
             RankingPathElement<V, E> newPathElement =
-                new RankingPathElement<>(this.graph, prevPathElement, edge, weight);
+                new RankingPathElement<>(this.graph, prevPathElement, edge, weight, newPathPriority);
 
             // the new path is inserted at the end of the list.
             this.pathElements.add(newPathElement);
@@ -203,18 +214,25 @@ final class RankingPathElementList<V, E>
                 continue;
             }
             double newPathWeight = calculatePathWeight(prevPathElement, edge);
+            double spurPathDistance = getSpurPathDistance(prevPathElement);
+            if(spurPathDistance == Double.POSITIVE_INFINITY){
+                continue;
+            }
+            double newPathPriority = newPathWeight + spurPathDistance;
             RankingPathElement<V, E> newPathElement =
-                new RankingPathElement<>(this.graph, prevPathElement, edge, newPathWeight);
+                new RankingPathElement<>(this.graph, prevPathElement, edge, newPathWeight, newPathPriority);
 
             // loop over the paths of the list at vertex y from yIndex to the
             // end.
             RankingPathElement<V, E> yPathElement = null;
+            double yPathPriority = Double.NEGATIVE_INFINITY;
             for (; yIndex < size(); yIndex++) {
                 yPathElement = get(yIndex);
+                yPathPriority = yPathElement.getPriority();
 
                 // case when the new path is shorter than the path Py stored at
                 // index y
-                if (newPathWeight < yPathElement.getWeight()) {
+                if (newPathPriority < yPathPriority) {
                     this.pathElements.add(yIndex, newPathElement);
                     pathAdded = true;
 
@@ -227,7 +245,7 @@ final class RankingPathElementList<V, E>
 
                 // case when the new path is of the same length as the path Py
                 // stored at index y
-                if (newPathWeight == yPathElement.getWeight()) {
+                if (newPathPriority == yPathPriority) {
                     this.pathElements.add(yIndex + 1, newPathElement);
                     pathAdded = true;
 
@@ -241,7 +259,7 @@ final class RankingPathElementList<V, E>
 
             // case when the new path is longer than the longest path in the
             // list (Py stored at the last index y)
-            if (newPathWeight > yPathElement.getWeight()) {
+            if (newPathPriority > yPathPriority) {
                 // ensures max size limit is not exceeded.
                 if (size() < this.maxSize) {
                     // the new path is inserted at the end of the list.
@@ -288,50 +306,42 @@ final class RankingPathElementList<V, E>
         return pathWeight;
     }
 
-    /**
-     * Ensures that paths of the list do not disconnect the guard-vertex.
-     *
-     * @return <code>true</code> if the specified path element disconnects the guard-vertex,
-     *         <code>false</code> otherwise.
-     */
-    private boolean isGuardVertexDisconnected(RankingPathElement<V, E> prevPathElement)
+
+    private double getSpurPathDistance(RankingPathElement<V, E> prevPathElement)
     {
         if (this.guardVertexToNotDisconnect == null) {
-            return false;
+            throw new RuntimeException();
         }
 
-        if (this.path2disconnect.containsKey(prevPathElement)) {
-            return this.path2disconnect.get(prevPathElement);
+        Double cachedDistance = this.elementToSpurPathDistance.get(prevPathElement);
+        if(cachedDistance != null){
+            return cachedDistance;
         }
 
-        ConnectivityInspector<V, E> connectivityInspector;
-        PathMask<V, E> connectivityMask = new PathMask<>(prevPathElement);
+        PathMask<V, E> pathMask = new PathMask<>(prevPathElement);
+        MaskSubgraph<V, E> maskSubgraph = new MaskSubgraph<>(
+            this.graph, pathMask::isVertexMasked, pathMask::isEdgeMasked);
 
-        MaskSubgraph<V, E> connectivityGraph = new MaskSubgraph<>(
-            this.graph, connectivityMask::isVertexMasked, connectivityMask::isEdgeMasked);
-        connectivityInspector = new ConnectivityInspector<>(connectivityGraph);
-
-        if (connectivityMask.isVertexMasked(this.guardVertexToNotDisconnect)) {
+        double result;
+        if (pathMask.isVertexMasked(this.guardVertexToNotDisconnect)) {
             // the guard-vertex was already in the path element -> invalid path
-            this.path2disconnect.put(prevPathElement, true);
-            return true;
+            result = Double.POSITIVE_INFINITY;
+        } else {
+            GraphPath<V, E> graphPath = DijkstraShortestPath.findPathBetween(maskSubgraph, this.vertex, this.guardVertexToNotDisconnect);
+            if (graphPath == null) {
+                // there is no path to guard-vertex
+                result = Double.POSITIVE_INFINITY;
+            } else {
+                result = graphPath.getWeight();
+            }
         }
-
-        if (!connectivityInspector.pathExists(this.vertex, this.guardVertexToNotDisconnect)) {
-            this.path2disconnect.put(prevPathElement, true);
-            return true;
-        }
-
-        this.path2disconnect.put(prevPathElement, false);
-        return false;
+        this.elementToSpurPathDistance.put(prevPathElement, result);
+        return result;
     }
 
     private boolean isNotValidPath(RankingPathElement<V, E> prevPathElement, E edge)
     {
         if (!isSimplePath(prevPathElement, edge)) {
-            return true;
-        }
-        if (isGuardVertexDisconnected(prevPathElement)) {
             return true;
         }
 
