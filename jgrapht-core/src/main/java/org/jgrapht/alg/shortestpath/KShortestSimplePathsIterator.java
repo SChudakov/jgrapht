@@ -71,7 +71,7 @@ class KShortestSimplePathsIterator<V, E>
     /**
      * Performs path validations in addition to the basics (source and target are connected w/o
      * loops)
-     * 
+     *
      */
     private PathValidator<V, E> pathValidator = null;
 
@@ -271,6 +271,13 @@ class KShortestSimplePathsIterator<V, E>
                 }
             }
 
+//            improvedPaths.pathElements.sort(Comparator.comparingDouble(RankingPathElement::getWeight));
+            for (int i = 1; i < improvedPaths.pathElements.size(); ++i) {
+                if (improvedPaths.pathElements.get(i).getPriority() < improvedPaths.pathElements.get(i - 1).getPriority()) {
+                    System.out.println();
+                    throw new RuntimeException("not sorted");
+                }
+            }
             this.prevSeenDataContainer.put(vertex, improvedPaths);
         }
 

@@ -24,6 +24,7 @@ import org.jgrapht.graph.GraphWalk;
 import org.jgrapht.graph.MaskSubgraph;
 
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -147,6 +148,13 @@ final class RankingPathElementList<V, E>
             // the new path is inserted at the end of the list.
             this.pathElements.add(newPathElement);
         }
+
+        for (int i = 1; i < pathElements.size(); ++i) {
+            if (pathElements.get(i).getPriority() < pathElements.get(i - 1).getPriority()) {
+                throw new RuntimeException("not sorted");
+            }
+        }
+//        pathElements.sort(Comparator.comparingDouble(RankingPathElement::getWeight));
     }
 
     /**
@@ -272,7 +280,13 @@ final class RankingPathElementList<V, E>
                 }
             }
         }
-
+//        pathElements.sort(Comparator.comparingDouble(RankingPathElement::getWeight));
+        for (int i = 1; i < pathElements.size(); ++i) {
+            if (pathElements.get(i).getPriority() < pathElements.get(i - 1).getPriority()) {
+                System.out.println(elementList.get(0).getVertex() + " " + edge + " " + getVertex());
+                throw new RuntimeException("not sorted");
+            }
+        }
         return pathAdded;
     }
 

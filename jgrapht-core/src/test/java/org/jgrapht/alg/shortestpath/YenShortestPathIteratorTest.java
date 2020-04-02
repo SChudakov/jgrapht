@@ -426,10 +426,10 @@ public class YenShortestPathIteratorTest
     public void testOnRandomGraphs()
     {
         Random random = new Random(SEED);
-        int n = 14;
-        double p = 0.3;
+        int n = 50;
+        double p = 0.1;
         int numberOfRandomEdges = 0;
-        for (int i = 0; i < 100000; i++) {
+        for (int i = 0; i < 1000; i++) {
             System.out.println(i);
 
             SimpleDirectedWeightedGraph<Integer, DefaultWeightedEdge> graph =
@@ -477,7 +477,7 @@ public class YenShortestPathIteratorTest
         for (int i = 0; i < NUMBER_OF_PATH_TO_ITERATE && yenPathIterator.hasNext()
             && expectedPathsIterator.hasNext(); ++i)
         {
-            System.out.println(i);
+//            System.out.println(i);
             GraphPath<Integer, DefaultWeightedEdge> expected = expectedPathsIterator.next();
             GraphPath<Integer, DefaultWeightedEdge> actual = yenPathIterator.next();
 
@@ -486,7 +486,7 @@ public class YenShortestPathIteratorTest
             }catch (AssertionError e){
                 System.out.println("expected path: \t" + expected.getVertexList());
                 System.out.println("actual path: \t" + actual);
-                TestUtils.writeGraph("/home/semen/drive/python/networkx-trials/data/yen/failing_graph.txt", graph);
+                TestUtils.writeGraph("/home/semen/drive/python/networkx-trials/data/yen/failing_graph2.txt", graph);
                 throw e;
             }
             ((GraphWalk<Integer, DefaultWeightedEdge>) actual).verify();
