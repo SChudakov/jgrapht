@@ -1,6 +1,7 @@
 package org.jgrapht.alg.similarity;
 
 import org.jgrapht.Graph;
+import org.jgrapht.GraphTests;
 import org.jgrapht.Graphs;
 
 import java.util.ArrayList;
@@ -25,16 +26,44 @@ public class ZhangShashaTreeEditDistance<V, E> {
     private double[][] treeDistance;
     private List<Operation> operationsList;
 
+    public ZhangShashaTreeEditDistance(Graph<V, E> graph1, V root1, Graph<V, E> graph2, V root2) {
+        this(graph1, root1, graph2, root2, v -> 1.0, v -> 1.0, (v1, v2) -> {
+            if (v1.equals(v2)) {
+                return 0.0;
+            }
+            return 1.0;
+        });
+    }
+
     public ZhangShashaTreeEditDistance(Graph<V, E> graph1, V root1, Graph<V, E> graph2, V root2,
                                        ToDoubleFunction<V> insertCost, ToDoubleFunction<V> removeCost,
                                        ToDoubleBiFunction<V, V> changeCost) {
         this.graph1 = Objects.requireNonNull(graph1, "graph1 cannot be null!");
-        this.root1 = Objects.requireNonNull(root1, "root1 cannot be null!");
+        this.root1 = root1;
         this.graph2 = Objects.requireNonNull(graph2, "graph2 cannot be null!");
-        this.root2 = Objects.requireNonNull(root2, "root2 cannot be null");
+        this.root2 = root2;
+        if (!GraphTests.isTree(graph1)) {
+            throw new IllegalArgumentException("graph1 must be a tree!");
+        }
+        if (!GraphTests.isTree(graph2)) {
+            throw new IllegalArgumentException("graph2 must be a tree!");
+        }
+        if (root1 == null) {
+            if (graph1.vertexSet().size() != 0) {
+                throw new IllegalArgumentException("root1 can only be null if graph1 has not vertices!");
+            }
+        }
+        if (root2 == null) {
+            if (graph2.vertexSet().size() != 0) {
+                throw new IllegalArgumentException("root2 can only be null if graph2 has not vertices!");
+            }
+        }
         this.insertCost = Objects.requireNonNull(insertCost, "insertCost cannot be null!");
         this.removeCost = Objects.requireNonNull(removeCost, "removeCost cannot be null!");
         this.changeCost = Objects.requireNonNull(changeCost, "changeCost cannot be null!");
+        int m = graph1.vertexSet().size() + 1;
+        int n = graph2.vertexSet().size() + 1;
+        treeDistance = new double[m][n];
     }
 
     public double getDistance() {
@@ -46,6 +75,7 @@ public class ZhangShashaTreeEditDistance<V, E> {
                 treeDistance(keyroot1, keyroot2, ordering1, ordering2);
             }
         }
+
 
         int s1 = graph1.vertexSet().size();
         int s2 = graph2.vertexSet().size();
@@ -119,15 +149,20 @@ public class ZhangShashaTreeEditDistance<V, E> {
             this.treeRoot = treeRoot;
 
             int numberOfVertices = tree.vertexSet().size();
-            currentIndex = 1;
+            keyroots = new ArrayList<>();
             indexToVertexMap = new ArrayList<>(Collections.nCopies(numberOfVertices + 1, null));
             indexToLMap = new ArrayList<>(Collections.nCopies(numberOfVertices + 1, null));
+            currentIndex = 1;
 
             List<V> stack = new ArrayList<>();
             computeKeyrootsAndMapping(treeRoot, stack, true);
         }
 
+
         private int computeKeyrootsAndMapping(V v, List<V> stack, boolean isKeyroot) {
+            if (treeRoot == null) {
+                return -1;
+            }
             stack.add(v);
 
             V vParent = null;
@@ -164,9 +199,21 @@ public class ZhangShashaTreeEditDistance<V, E> {
     }
 
     public class Operation {
-        private OperationType type;
-        private V firstOperand;
-        private V secondOperand;
+        private final OperationType type;
+        private final V firstOperand;
+        private final V secondOperand;
+
+        public OperationType getType() {
+            return type;
+        }
+
+        public V getFirstOperand() {
+            return firstOperand;
+        }
+
+        public V getSecondOperand() {
+            return secondOperand;
+        }
 
         public Operation(OperationType type, V firstOperand, V secondOperand) {
             this.type = type;
