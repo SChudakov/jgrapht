@@ -47,7 +47,7 @@ public class ZhangShashaTreeEditDistance<V, E> {
         this.insertCost = Objects.requireNonNull(insertCost, "insertCost cannot be null!");
         this.removeCost = Objects.requireNonNull(removeCost, "removeCost cannot be null!");
         this.changeCost = Objects.requireNonNull(changeCost, "changeCost cannot be null!");
-
+        this.operationsList = new ArrayList<>();
         if (!GraphTests.isTree(graph1)) {
             throw new IllegalArgumentException("graph1 must be a tree!");
         }
@@ -62,7 +62,6 @@ public class ZhangShashaTreeEditDistance<V, E> {
 
     public double getDistance() {
         lazyComputeEditDistance();
-
         int s1 = graph1.vertexSet().size();
         int s2 = graph2.vertexSet().size();
         return treeDistance[s1][s2];
@@ -102,7 +101,7 @@ public class ZhangShashaTreeEditDistance<V, E> {
         }
         for (int j1 = lj; j1 < j; ++j1) {
             V j1Vertex = ordering2.indexToVertexMap.get(j1);
-            forestdist[0][j1] = forestdist[j1 - 1][0] + removeCost.applyAsDouble(j1Vertex);
+            forestdist[0][j1] = forestdist[0][j1 - 1] + removeCost.applyAsDouble(j1Vertex);
         }
 
         for (int i1 = li; i1 < i; ++i1) {
@@ -117,15 +116,15 @@ public class ZhangShashaTreeEditDistance<V, E> {
                     double dist3 = forestdist[i1 - 1][j1 - 1] + changeCost.applyAsDouble(i1Vertex, j1Vertex);
                     double result = Math.min(dist1, Math.min(dist2, dist3));
 
-                    Operation op;
-                    if (result == dist1) { // remove operation
-                        op = new Operation(OperationType.REMOVE, i1Vertex, null);
-                    } else if (result == dist2) { // insert operation
-                        op = new Operation(OperationType.INSERT, j1Vertex, null);
-                    } else { // result == dist3 => change operation
-                        op = new Operation(OperationType.CHANGE, i1Vertex, j1Vertex);
-                    }
-                    operationsList.add(op);
+//                    Operation op;
+//                    if (result == dist1) { // remove operation
+//                        op = new Operation(OperationType.REMOVE, i1Vertex, null);
+//                    } else if (result == dist2) { // insert operation
+//                        op = new Operation(OperationType.INSERT, j1Vertex, null);
+//                    } else { // result == dist3 => change operation
+//                        op = new Operation(OperationType.CHANGE, i1Vertex, j1Vertex);
+//                    }
+//                    operationsList.add(op);
 
                     forestdist[i1][j1] = result;
                     treeDistance[i1][j1] = result;
@@ -175,7 +174,7 @@ public class ZhangShashaTreeEditDistance<V, E> {
             boolean isKeyrootArg = false;
             int lValue = -1;
             for (V vChild : Graphs.successorListOf(tree, v)) {
-                if (vParent == null || vChild.equals(vParent)) {
+                if (vParent == null || !vChild.equals(vParent)) {
                     int lVChild = computeKeyrootsAndMapping(vChild, stack, isKeyrootArg);
                     isKeyrootArg = true;
                     if (lValue == -1) {
