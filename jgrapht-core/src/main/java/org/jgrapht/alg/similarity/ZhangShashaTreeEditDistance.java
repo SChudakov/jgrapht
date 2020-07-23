@@ -26,6 +26,8 @@ public class ZhangShashaTreeEditDistance<V, E> {
     private double[][] treeDistance;
     private List<Operation> operationsList;
 
+    private boolean algorithmExecuted;
+
     public ZhangShashaTreeEditDistance(Graph<V, E> graph1, V root1, Graph<V, E> graph2, V root2) {
         this(graph1, root1, graph2, root2, v -> 1.0, v -> 1.0, (v1, v2) -> {
             if (v1.equals(v2)) {
@@ -67,20 +69,31 @@ public class ZhangShashaTreeEditDistance<V, E> {
     }
 
     public double getDistance() {
-        TreeOrdering ordering1 = new TreeOrdering(graph1, root1);
-        TreeOrdering ordering2 = new TreeOrdering(graph2, root2);
-
-        for (int keyroot1 : ordering1.keyroots) {
-            for (Integer keyroot2 : ordering2.keyroots) {
-                treeDistance(keyroot1, keyroot2, ordering1, ordering2);
-            }
-        }
-
+        lazyComputeEditDistance();
 
         int s1 = graph1.vertexSet().size();
         int s2 = graph2.vertexSet().size();
-
         return treeDistance[s1][s2];
+    }
+
+    public List<Operation> getOperationsList() {
+        lazyComputeEditDistance();
+        return operationsList;
+    }
+
+    private void lazyComputeEditDistance() {
+        if (!algorithmExecuted) {
+            TreeOrdering ordering1 = new TreeOrdering(graph1, root1);
+            TreeOrdering ordering2 = new TreeOrdering(graph2, root2);
+
+            for (int keyroot1 : ordering1.keyroots) {
+                for (Integer keyroot2 : ordering2.keyroots) {
+                    treeDistance(keyroot1, keyroot2, ordering1, ordering2);
+                }
+            }
+
+            algorithmExecuted = true;
+        }
     }
 
     private void treeDistance(int i, int j, TreeOrdering ordering1, TreeOrdering ordering2) {
