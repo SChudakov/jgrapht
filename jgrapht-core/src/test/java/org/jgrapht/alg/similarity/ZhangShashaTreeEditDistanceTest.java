@@ -13,73 +13,54 @@ public class ZhangShashaTreeEditDistanceTest {
     int[][] articleTree2 = new int[][]{{1, 5}, {1, 3}, {5, 2}, {2, 4}, {2, 6}};
     int[][] generatedTree = new int[][]{{1, 2}, {1, 4}, {2, 5}, {2, 1}, {3, 6}, {4, 1}, {4, 10}, {5, 6}, {5, 7}, {5, 9}, {5, 2}, {6, 3}, {6, 5}, {7, 8}, {7, 5}, {8, 7}, {9, 5}, {10, 4}};
 
+    private static void testOnTrees(Graph<Integer, DefaultEdge> tree1, int root1,
+                                    Graph<Integer, DefaultEdge> tree2, int root2,
+                                    double expectedDistance) {
+        ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
+                = new ZhangShashaTreeEditDistance<>(tree1, root1, tree2, root2);
+        double distance = treeEditDistance.getDistance();
+
+        assertEquals(expectedDistance, distance, 1e-9);
+    }
+
+    protected static Graph<Integer, DefaultEdge> readGraph(int[][] representation) {
+        Graph<Integer, DefaultEdge> graph = new SimpleGraph<>(DefaultEdge.class);
+        for (int[] ints : representation) {
+            Graphs.addEdgeWithVertices(graph, ints[0], ints[1]);
+        }
+        return graph;
+    }
+
     @Test
     public void testTED_BothTreesAreEmpty() {
-        Graph<Integer, DefaultEdge> graph1 = getGraphWithOneVertex();
-        Graph<Integer, DefaultEdge> graph2 = getGraphWithOneVertex();
-        ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
-                = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
-        double distance = treeEditDistance.getDistance();
-        assertEquals(0.0, distance, 1e-9);
+        testOnTrees(getGraphWithOneVertex(), 1, getGraphWithOneVertex(), 1, 0.0);
     }
 
     @Test
     public void testTED_FirstTreeIsEmpty() {
-        Graph<Integer, DefaultEdge> graph1 = getGraphWithOneVertex();
-        Graph<Integer, DefaultEdge> graph2 = new SimpleGraph<>(DefaultEdge.class);
-        readGraph(graph2, articleTree1);
-        ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
-                = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
-        double distance = treeEditDistance.getDistance();
-        assertEquals(5.0, distance, 1e-9);
+        testOnTrees(getGraphWithOneVertex(), 1, readGraph(articleTree1), 1, 5.0);
     }
 
     @Test
     public void testTED_SecondTreeIsEmpty() {
-        Graph<Integer, DefaultEdge> graph1 = new SimpleGraph<>(DefaultEdge.class);
-        readGraph(graph1, articleTree1);
-        Graph<Integer, DefaultEdge> graph2 = getGraphWithOneVertex();
-        ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
-                = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
-        double distance = treeEditDistance.getDistance();
-        assertEquals(5.0, distance, 1e-9);
+        testOnTrees(readGraph(articleTree1), 1, getGraphWithOneVertex(), 1, 5.0);
     }
 
     @Test
     public void testTED_TreesOfEqualSize() {
-        Graph<Integer, DefaultEdge> graph1 = new SimpleGraph<>(DefaultEdge.class);
-        readGraph(graph1, articleTree1);
-        Graph<Integer, DefaultEdge> graph2 = new SimpleGraph<>(DefaultEdge.class);
-        readGraph(graph2, articleTree2);
-        ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
-                = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
-        double distance = treeEditDistance.getDistance();
-        assertEquals(2.0, distance, 1e-9);
+        testOnTrees(readGraph(articleTree1), 1, readGraph(articleTree2), 1, 2.0);
     }
 
     @Test
     public void testTED_FirstTreeLarger() {
-        Graph<Integer, DefaultEdge> graph1 = new SimpleGraph<>(DefaultEdge.class);
-        readGraph(graph1, generatedTree);
-        Graph<Integer, DefaultEdge> graph2 = new SimpleGraph<>(DefaultEdge.class);
-        readGraph(graph2, articleTree2);
-        ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
-                = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
-        double distance = treeEditDistance.getDistance();
-        assertEquals(9.0, distance, 1e-9);
+        testOnTrees(readGraph(generatedTree), 1, readGraph(articleTree2), 1, 9.0);
     }
 
     @Test
     public void testTED_SecondTreeLarger() {
-        Graph<Integer, DefaultEdge> graph1 = new SimpleGraph<>(DefaultEdge.class);
-        readGraph(graph1, articleTree1);
-        Graph<Integer, DefaultEdge> graph2 = new SimpleGraph<>(DefaultEdge.class);
-        readGraph(graph2, generatedTree);
-        ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
-                = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
-        double distance = treeEditDistance.getDistance();
-        assertEquals(9.0, distance, 1e-9);
+        testOnTrees(readGraph(articleTree1), 1, readGraph(generatedTree), 1, 9.0);
     }
+
 
     private static Graph<Integer, DefaultEdge> getGraphWithOneVertex() {
         Graph<Integer, DefaultEdge> graph = new SimpleGraph<>(DefaultEdge.class);
@@ -87,9 +68,5 @@ public class ZhangShashaTreeEditDistanceTest {
         return graph;
     }
 
-    protected static void readGraph(Graph<Integer, DefaultEdge> graph, int[][] representation) {
-        for (int[] ints : representation) {
-            Graphs.addEdgeWithVertices(graph, ints[0], ints[1]);
-        }
-    }
+
 }
