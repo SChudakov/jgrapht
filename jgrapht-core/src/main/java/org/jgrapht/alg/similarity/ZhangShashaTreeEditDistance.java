@@ -148,10 +148,11 @@ public class ZhangShashaTreeEditDistance<V, E> {
         }
         System.out.println(i + " " + j);
         for (double[] doubles : forestdist) {
-            System.out.println(Arrays.toString(doubles));
+            System.out.println(Arrays.toString(Arrays.stream(doubles).mapToInt(d -> (int) d).toArray()));
         }
+        System.out.println();
         for (double[] doubles : treeDistance) {
-            System.out.println(Arrays.toString(doubles));
+            System.out.println(Arrays.toString(Arrays.stream(doubles).mapToInt(d -> (int) d).toArray()));
         }
         System.out.println();
     }
