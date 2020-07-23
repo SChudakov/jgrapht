@@ -146,14 +146,14 @@ public class ZhangShashaTreeEditDistance<V, E> {
                 }
             }
         }
-        System.out.println(i + " " + j);
-        for (double[] doubles : forestdist) {
-            System.out.println(Arrays.toString(doubles));
-        }
-        for (double[] doubles : treeDistance) {
-            System.out.println(Arrays.toString(doubles));
-        }
-        System.out.println();
+//        System.out.println(i + " " + j);
+//        for (double[] doubles : forestdist) {
+//            System.out.println(Arrays.toString(doubles));
+//        }
+//        for (double[] doubles : treeDistance) {
+//            System.out.println(Arrays.toString(doubles));
+//        }
+//        System.out.println();
     }
 
     private class TreeOrdering {
