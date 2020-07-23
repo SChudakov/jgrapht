@@ -3,7 +3,6 @@ package org.jgrapht.alg.similarity;
 import org.jgrapht.Graph;
 import org.jgrapht.Graphs;
 import org.jgrapht.graph.DefaultEdge;
-import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.SimpleGraph;
 import org.junit.Test;
 
@@ -11,7 +10,7 @@ import static org.junit.Assert.assertEquals;
 
 public class ZhangShashaTreeEditDistanceTest {
     int[][] articleTree1 = new int[][]{{1, 2}, {1, 3}, {2, 4}, {2, 5}, {5, 6}};
-    int[][] articleTree2 = new int[][]{{1, 2}, {1, 3}, {2, 4}, {4, 5}, {4, 6}};
+    int[][] articleTree2 = new int[][]{{1, 5}, {1, 3}, {5, 2}, {2, 4}, {2, 6}};
     int[][] generatedTree = new int[][]{{1, 2}, {1, 4}, {2, 5}, {2, 1}, {3, 6}, {4, 1}, {4, 10}, {5, 6}, {5, 7}, {5, 9}, {5, 2}, {6, 3}, {6, 5}, {7, 8}, {7, 5}, {8, 7}, {9, 5}, {10, 4}};
 
     @Test
@@ -32,7 +31,7 @@ public class ZhangShashaTreeEditDistanceTest {
         ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
                 = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
         double distance = treeEditDistance.getDistance();
-        assertEquals(6.0, distance, 1e-9);
+        assertEquals(5.0, distance, 1e-9);
     }
 
     @Test
@@ -43,7 +42,7 @@ public class ZhangShashaTreeEditDistanceTest {
         ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
                 = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
         double distance = treeEditDistance.getDistance();
-        assertEquals(6.0, distance, 1e-9);
+        assertEquals(5.0, distance, 1e-9);
     }
 
     @Test
@@ -67,7 +66,7 @@ public class ZhangShashaTreeEditDistanceTest {
         ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
                 = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
         double distance = treeEditDistance.getDistance();
-        assertEquals(2.0, distance, 1e-9);
+        assertEquals(9.0, distance, 1e-9);
     }
 
     @Test
@@ -79,7 +78,7 @@ public class ZhangShashaTreeEditDistanceTest {
         ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
                 = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
         double distance = treeEditDistance.getDistance();
-        assertEquals(2.0, distance, 1e-9);
+        assertEquals(9.0, distance, 1e-9);
     }
 
     private static Graph<Integer, DefaultEdge> getGraphWithOneVertex() {

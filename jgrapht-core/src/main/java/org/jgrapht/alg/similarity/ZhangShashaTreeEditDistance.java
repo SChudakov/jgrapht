@@ -4,7 +4,6 @@ import org.jgrapht.Graph;
 import org.jgrapht.GraphTests;
 import org.jgrapht.Graphs;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -142,7 +141,7 @@ public class ZhangShashaTreeEditDistance<V, E> {
                 } else {
                     double dist1 = forestdist[iIndex - 1][jIndex] + removeCost.applyAsDouble(i1Vertex);
                     double dist2 = forestdist[iIndex][jIndex - 1] + insertCost.applyAsDouble(j1Vertex);
-                    double dist3 = forestdist[iIndex - 1][jIndex - 1] + treeDistance[iIndex][jIndex];
+                    double dist3 = forestdist[iIndex - 1][jIndex - 1] + treeDistance[i1][j1];
                     forestdist[iIndex][jIndex] = Math.min(dist1, Math.min(dist2, dist3));
                 }
             }
