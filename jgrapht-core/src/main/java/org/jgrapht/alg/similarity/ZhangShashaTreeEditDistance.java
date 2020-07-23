@@ -139,22 +139,24 @@ public class ZhangShashaTreeEditDistance<V, E> {
                     forestdist[iIndex][jIndex] = result;
                     treeDistance[i1][j1] = result;
                 } else {
+                    int p = li1 - 1 - iOffset;
+                    int q = lj1 - 1 - jOffset;
                     double dist1 = forestdist[iIndex - 1][jIndex] + removeCost.applyAsDouble(i1Vertex);
                     double dist2 = forestdist[iIndex][jIndex - 1] + insertCost.applyAsDouble(j1Vertex);
-                    double dist3 = forestdist[iIndex - 1][jIndex - 1] + treeDistance[i1][j1];
+                    double dist3 = forestdist[p][q] + treeDistance[i1][j1];
                     forestdist[iIndex][jIndex] = Math.min(dist1, Math.min(dist2, dist3));
                 }
             }
         }
-        System.out.println(i + " " + j);
-        for (double[] doubles : forestdist) {
-            System.out.println(Arrays.toString(Arrays.stream(doubles).mapToInt(d -> (int) d).toArray()));
-        }
-        System.out.println();
-        for (double[] doubles : treeDistance) {
-            System.out.println(Arrays.toString(Arrays.stream(doubles).mapToInt(d -> (int) d).toArray()));
-        }
-        System.out.println();
+//        System.out.println(i + " " + j);
+//        for (double[] doubles : forestdist) {
+//            System.out.println(Arrays.toString(Arrays.stream(doubles).mapToInt(d -> (int) d).toArray()));
+//        }
+//        System.out.println();
+//        for (double[] doubles : treeDistance) {
+//            System.out.println(Arrays.toString(Arrays.stream(doubles).mapToInt(d -> (int) d).toArray()));
+//        }
+//        System.out.println();
     }
 
     private class TreeOrdering {

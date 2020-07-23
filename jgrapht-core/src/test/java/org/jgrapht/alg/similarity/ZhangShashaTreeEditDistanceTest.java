@@ -12,7 +12,7 @@ import static org.junit.Assert.assertEquals;
 public class ZhangShashaTreeEditDistanceTest {
     int[][] articleTree1 = new int[][]{{1, 2}, {1, 3}, {2, 4}, {2, 5}, {5, 6}};
     int[][] articleTree2 = new int[][]{{1, 5}, {1, 3}, {5, 2}, {2, 4}, {2, 6}};
-    int[][] generatedTree = new int[][]{{1, 2}, {1, 4}, {2, 5}, {3, 6}, {4, 10}, {5, 6}, {5, 7}, {5, 9},  {7, 8}, {10, 4}};
+    int[][] generatedTree = new int[][]{{1, 2}, {1, 4}, {2, 5}, {3, 6}, {4, 10}, {5, 6}, {5, 7}, {5, 9}, {7, 8}, {10, 4}};
 
     private static void testOnTrees(Graph<Integer, DefaultEdge> tree1, int root1,
                                     Graph<Integer, DefaultEdge> tree2, int root2,
