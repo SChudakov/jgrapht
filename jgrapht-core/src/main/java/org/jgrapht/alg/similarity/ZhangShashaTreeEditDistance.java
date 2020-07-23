@@ -41,28 +41,20 @@ public class ZhangShashaTreeEditDistance<V, E> {
                                        ToDoubleFunction<V> insertCost, ToDoubleFunction<V> removeCost,
                                        ToDoubleBiFunction<V, V> changeCost) {
         this.graph1 = Objects.requireNonNull(graph1, "graph1 cannot be null!");
-        this.root1 = root1;
+        this.root1 = Objects.requireNonNull(root1, "root1 cannot be null!");
         this.graph2 = Objects.requireNonNull(graph2, "graph2 cannot be null!");
-        this.root2 = root2;
+        this.root2 = Objects.requireNonNull(root2, "root2 cannot be null!");
+        this.insertCost = Objects.requireNonNull(insertCost, "insertCost cannot be null!");
+        this.removeCost = Objects.requireNonNull(removeCost, "removeCost cannot be null!");
+        this.changeCost = Objects.requireNonNull(changeCost, "changeCost cannot be null!");
+
         if (!GraphTests.isTree(graph1)) {
             throw new IllegalArgumentException("graph1 must be a tree!");
         }
         if (!GraphTests.isTree(graph2)) {
             throw new IllegalArgumentException("graph2 must be a tree!");
         }
-        if (root1 == null) {
-            if (graph1.vertexSet().size() != 0) {
-                throw new IllegalArgumentException("root1 can only be null if graph1 has not vertices!");
-            }
-        }
-        if (root2 == null) {
-            if (graph2.vertexSet().size() != 0) {
-                throw new IllegalArgumentException("root2 can only be null if graph2 has not vertices!");
-            }
-        }
-        this.insertCost = Objects.requireNonNull(insertCost, "insertCost cannot be null!");
-        this.removeCost = Objects.requireNonNull(removeCost, "removeCost cannot be null!");
-        this.changeCost = Objects.requireNonNull(changeCost, "changeCost cannot be null!");
+
         int m = graph1.vertexSet().size() + 1;
         int n = graph2.vertexSet().size() + 1;
         treeDistance = new double[m][n];
@@ -173,9 +165,6 @@ public class ZhangShashaTreeEditDistance<V, E> {
 
 
         private int computeKeyrootsAndMapping(V v, List<V> stack, boolean isKeyroot) {
-            if (treeRoot == null) {
-                return -1;
-            }
             stack.add(v);
 
             V vParent = null;

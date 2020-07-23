@@ -3,6 +3,7 @@ package org.jgrapht.alg.similarity;
 import org.jgrapht.Graph;
 import org.jgrapht.Graphs;
 import org.jgrapht.graph.DefaultEdge;
+import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.SimpleGraph;
 import org.junit.Test;
 
@@ -15,21 +16,21 @@ public class ZhangShashaTreeEditDistanceTest {
 
     @Test
     public void testTED_BothTreesAreEmpty() {
-        Graph<Integer, DefaultEdge> graph1 = new SimpleGraph<>(DefaultEdge.class);
-        Graph<Integer, DefaultEdge> graph2 = new SimpleGraph<>(DefaultEdge.class);
+        Graph<Integer, DefaultEdge> graph1 = getGraphWithOneVertex();
+        Graph<Integer, DefaultEdge> graph2 = getGraphWithOneVertex();
         ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
-                = new ZhangShashaTreeEditDistance<>(graph1, null, graph2, null);
+                = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
         double distance = treeEditDistance.getDistance();
         assertEquals(0.0, distance, 1e-9);
     }
 
     @Test
     public void testTED_FirstTreeIsEmpty() {
-        Graph<Integer, DefaultEdge> graph1 = new SimpleGraph<>(DefaultEdge.class);
+        Graph<Integer, DefaultEdge> graph1 = getGraphWithOneVertex();
         Graph<Integer, DefaultEdge> graph2 = new SimpleGraph<>(DefaultEdge.class);
         readGraph(graph2, articleTree1);
         ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
-                = new ZhangShashaTreeEditDistance<>(graph1, null, graph2, 1);
+                = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
         double distance = treeEditDistance.getDistance();
         assertEquals(6.0, distance, 1e-9);
     }
@@ -38,9 +39,9 @@ public class ZhangShashaTreeEditDistanceTest {
     public void testTED_SecondTreeIsEmpty() {
         Graph<Integer, DefaultEdge> graph1 = new SimpleGraph<>(DefaultEdge.class);
         readGraph(graph1, articleTree1);
-        Graph<Integer, DefaultEdge> graph2 = new SimpleGraph<>(DefaultEdge.class);
+        Graph<Integer, DefaultEdge> graph2 = getGraphWithOneVertex();
         ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
-                = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, null);
+                = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
         double distance = treeEditDistance.getDistance();
         assertEquals(6.0, distance, 1e-9);
     }
@@ -79,6 +80,12 @@ public class ZhangShashaTreeEditDistanceTest {
                 = new ZhangShashaTreeEditDistance<>(graph1, 1, graph2, 1);
         double distance = treeEditDistance.getDistance();
         assertEquals(2.0, distance, 1e-9);
+    }
+
+    private static Graph<Integer, DefaultEdge> getGraphWithOneVertex() {
+        Graph<Integer, DefaultEdge> graph = new SimpleGraph<>(DefaultEdge.class);
+        graph.addVertex(1);
+        return graph;
     }
 
     protected static void readGraph(Graph<Integer, DefaultEdge> graph, int[][] representation) {
