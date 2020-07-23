@@ -4,7 +4,9 @@ import org.jgrapht.Graph;
 import org.jgrapht.GraphTests;
 import org.jgrapht.Graphs;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -90,30 +92,39 @@ public class ZhangShashaTreeEditDistance<V, E> {
     private void treeDistance(int i, int j, TreeOrdering ordering1, TreeOrdering ordering2) {
         int li = ordering1.indexToLMap.get(i);
         int lj = ordering2.indexToLMap.get(j);
+
         int m = i - li + 2;
         int n = j - lj + 2;
-
         double[][] forestdist = new double[m][n];
 
-        for (int i1 = li; i1 < i; ++i1) {
+        int iOffset = li - 1;
+        int jOffset = lj - 1;
+
+        for (int i1 = li; i1 <= i; ++i1) {
             V i1Vertex = ordering1.indexToVertexMap.get(i1);
-            forestdist[i1][0] = forestdist[i1 - 1][0] + removeCost.applyAsDouble(i1Vertex);
+            int iIndex = i1 - iOffset;
+            forestdist[iIndex][0] = forestdist[iIndex - 1][0] + removeCost.applyAsDouble(i1Vertex);
         }
-        for (int j1 = lj; j1 < j; ++j1) {
+        for (int j1 = lj; j1 <= j; ++j1) {
             V j1Vertex = ordering2.indexToVertexMap.get(j1);
-            forestdist[0][j1] = forestdist[0][j1 - 1] + removeCost.applyAsDouble(j1Vertex);
+            int jIndex = j1 - jOffset;
+            forestdist[0][jIndex] = forestdist[0][jIndex - 1] + removeCost.applyAsDouble(j1Vertex);
         }
 
-        for (int i1 = li; i1 < i; ++i1) {
+        for (int i1 = li; i1 <= i; ++i1) {
             V i1Vertex = ordering1.indexToVertexMap.get(i1);
             int li1 = ordering1.indexToLMap.get(i1);
-            for (int j1 = lj; j1 < j; ++j1) {
+
+            for (int j1 = lj; j1 <= j; ++j1) {
                 V j1Vertex = ordering2.indexToVertexMap.get(j1);
                 int lj1 = ordering2.indexToLMap.get(j1);
+
+                int iIndex = i1 - iOffset;
+                int jIndex = j1 - jOffset;
                 if (li1 == li && lj1 == lj) {
-                    double dist1 = forestdist[i1 - 1][j1] + removeCost.applyAsDouble(i1Vertex);
-                    double dist2 = forestdist[i1][j1 - 1] + insertCost.applyAsDouble(j1Vertex);
-                    double dist3 = forestdist[i1 - 1][j1 - 1] + changeCost.applyAsDouble(i1Vertex, j1Vertex);
+                    double dist1 = forestdist[iIndex - 1][jIndex] + removeCost.applyAsDouble(i1Vertex);
+                    double dist2 = forestdist[iIndex][jIndex - 1] + insertCost.applyAsDouble(j1Vertex);
+                    double dist3 = forestdist[iIndex - 1][jIndex - 1] + changeCost.applyAsDouble(i1Vertex, j1Vertex);
                     double result = Math.min(dist1, Math.min(dist2, dist3));
 
 //                    Operation op;
@@ -126,16 +137,24 @@ public class ZhangShashaTreeEditDistance<V, E> {
 //                    }
 //                    operationsList.add(op);
 
-                    forestdist[i1][j1] = result;
+                    forestdist[iIndex][jIndex] = result;
                     treeDistance[i1][j1] = result;
                 } else {
-                    double dist1 = forestdist[i1 - 1][j1] + removeCost.applyAsDouble(i1Vertex);
-                    double dist2 = forestdist[i1][j1 - 1] + insertCost.applyAsDouble(j1Vertex);
-                    double dist3 = forestdist[i1 - 1][j1 - 1] + treeDistance[i1][j1];
-                    forestdist[i1][j1] = Math.min(dist1, Math.min(dist2, dist3));
+                    double dist1 = forestdist[iIndex - 1][jIndex] + removeCost.applyAsDouble(i1Vertex);
+                    double dist2 = forestdist[iIndex][jIndex - 1] + insertCost.applyAsDouble(j1Vertex);
+                    double dist3 = forestdist[iIndex - 1][jIndex - 1] + treeDistance[iIndex][jIndex];
+                    forestdist[iIndex][jIndex] = Math.min(dist1, Math.min(dist2, dist3));
                 }
             }
         }
+        System.out.println(i + " " + j);
+        for (double[] doubles : forestdist) {
+            System.out.println(Arrays.toString(doubles));
+        }
+        for (double[] doubles : treeDistance) {
+            System.out.println(Arrays.toString(doubles));
+        }
+        System.out.println();
     }
 
     private class TreeOrdering {
