@@ -5,7 +5,6 @@ import org.jgrapht.GraphTests;
 import org.jgrapht.Graphs;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -56,8 +55,8 @@ public class ZhangShashaTreeEditDistance<V, E> {
             throw new IllegalArgumentException("graph2 must be a tree!");
         }
 
-        int m = graph1.vertexSet().size() + 1;
-        int n = graph2.vertexSet().size() + 1;
+        int m = graph1.vertexSet().size();
+        int n = graph2.vertexSet().size();
         treeDistance = new double[m][n];
     }
 
@@ -65,7 +64,7 @@ public class ZhangShashaTreeEditDistance<V, E> {
         lazyComputeEditDistance();
         int s1 = graph1.vertexSet().size();
         int s2 = graph2.vertexSet().size();
-        return treeDistance[s1][s2];
+        return treeDistance[s1 - 1][s2 - 1];
     }
 
     public List<Operation> getOperationsList() {
@@ -137,13 +136,13 @@ public class ZhangShashaTreeEditDistance<V, E> {
 //                    operationsList.add(op);
 
                     forestdist[iIndex][jIndex] = result;
-                    treeDistance[i1][j1] = result;
+                    treeDistance[i1 - 1][j1 - 1] = result;
                 } else {
                     int p = li1 - 1 - iOffset;
                     int q = lj1 - 1 - jOffset;
                     double dist1 = forestdist[iIndex - 1][jIndex] + removeCost.applyAsDouble(i1Vertex);
                     double dist2 = forestdist[iIndex][jIndex - 1] + insertCost.applyAsDouble(j1Vertex);
-                    double dist3 = forestdist[p][q] + treeDistance[i1][j1];
+                    double dist3 = forestdist[p][q] + treeDistance[i1 - 1][j1 - 1];
                     forestdist[iIndex][jIndex] = Math.min(dist1, Math.min(dist2, dist3));
                 }
             }
