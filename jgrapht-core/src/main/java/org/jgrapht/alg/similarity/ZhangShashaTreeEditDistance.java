@@ -6,6 +6,7 @@ import org.jgrapht.Graphs;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.ToDoubleBiFunction;
@@ -178,44 +179,74 @@ public class ZhangShashaTreeEditDistance<V, E> {
             indexToLMap = new ArrayList<>(Collections.nCopies(numberOfVertices + 1, null));
             currentIndex = 1;
 
-            List<V> stack = new ArrayList<>();
-            computeKeyrootsAndMapping(treeRoot, stack, true);
+            computeKeyrootsAndMapping(treeRoot);
         }
 
+        private class RecursionEntry {
+            V v;
+            boolean isKeyroot;
 
-        private int computeKeyrootsAndMapping(V v, List<V> stack, boolean isKeyroot) {
-            stack.add(v);
+            V vParent;
+            boolean isKeyrootArg;
+            int lValue;
+            Iterator<V> vChildIterator;
+            V vChild;
+            int lVChild;
 
-            V vParent = null;
-            if (stack.size() > 1) {
-                vParent = stack.get(stack.size() - 2);
+            int state;
+
+            public RecursionEntry(V v, boolean isKeyroot) {
+                this.v = v;
+                this.isKeyroot = isKeyroot;
+                this.lValue = -1;
             }
 
-            boolean isKeyrootArg = false;
-            int lValue = -1;
-            for (V vChild : Graphs.successorListOf(tree, v)) {
-                if (vParent == null || !vChild.equals(vParent)) {
-                    int lVChild = computeKeyrootsAndMapping(vChild, stack, isKeyrootArg);
-                    isKeyrootArg = true;
-                    if (lValue == -1) {
-                        lValue = lVChild;
+        }
+
+        private void computeKeyrootsAndMapping(V treeRoot) {
+            List<RecursionEntry> stack = new ArrayList<>();
+            stack.add(new RecursionEntry(treeRoot, true));
+
+            while (!stack.isEmpty()) {
+                RecursionEntry entry = stack.get(stack.size() - 1);
+                if (entry.state == 0) {
+                    if (stack.size() > 1) {
+                        entry.vParent = stack.get(stack.size() - 2).v;
                     }
+                    entry.vChildIterator = Graphs.successorListOf(tree, entry.v).iterator();
+                    entry.state = 1;
+                } else if (entry.state == 1) {
+                    if (entry.vChildIterator.hasNext()) {
+                        entry.vChild = entry.vChildIterator.next();
+                        if (entry.vParent == null || !entry.vChild.equals(entry.vParent)) {
+                            stack.add(new RecursionEntry(entry.vChild, entry.isKeyrootArg));
+                            entry.state = 2;
+                        }
+                    } else {
+                        entry.state = 3;
+                    }
+                } else if (entry.state == 2) {
+                    entry.isKeyrootArg = true;
+                    if (entry.lValue == -1) {
+                        entry.lValue = entry.lVChild;
+                    }
+                    entry.state = 1;
+                } else if (entry.state == 3) {
+                    if (entry.lValue == -1) {
+                        entry.lValue = currentIndex;
+                    }
+                    if (entry.isKeyroot) {
+                        keyroots.add(currentIndex);
+                    }
+                    indexToVertexMap.set(currentIndex, entry.v);
+                    indexToLMap.set(currentIndex, entry.lValue);
+                    ++currentIndex;
+                    if (stack.size() > 1) {
+                        stack.get(stack.size() - 2).lVChild = entry.lValue;
+                    }
+                    stack.remove(stack.size() - 1);
                 }
             }
-
-            if (lValue == -1) { // this is a leaf
-                lValue = currentIndex;
-            }
-
-            if (isKeyroot) {
-                keyroots.add(currentIndex);
-            }
-            indexToVertexMap.set(currentIndex, v);
-            indexToLMap.set(currentIndex, lValue);
-            ++currentIndex;
-            stack.remove(stack.size() - 1);
-
-            return lValue;
         }
     }
 
