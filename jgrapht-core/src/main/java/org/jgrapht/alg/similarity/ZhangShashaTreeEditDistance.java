@@ -75,7 +75,7 @@ public class ZhangShashaTreeEditDistance<V, E> {
         lazyComputeEditDistance();
         int m = graph1.vertexSet().size();
         int n = graph2.vertexSet().size();
-        return operationLists.get(m - 1).get(n - 1);
+        return Collections.unmodifiableList(operationLists.get(m - 1).get(n - 1));
     }
 
     private void lazyComputeEditDistance() {
@@ -175,15 +175,6 @@ public class ZhangShashaTreeEditDistance<V, E> {
                 }
             }
         }
-//        System.out.println(i + " " + j);
-//        for (double[] doubles : forestdist) {
-//            System.out.println(Arrays.toString(Arrays.stream(doubles).mapToInt(d -> (int) d).toArray()));
-//        }
-//        System.out.println();
-//        for (double[] doubles : treeDistance) {
-//            System.out.println(Arrays.toString(Arrays.stream(doubles).mapToInt(d -> (int) d).toArray()));
-//        }
-//        System.out.println();
     }
 
     private List<Operation<V>> restoreOperationsList(List<List<CacheEntry>> cachedOperations, int i, int j) {
@@ -200,20 +191,6 @@ public class ZhangShashaTreeEditDistance<V, E> {
         }
 
         return result;
-    }
-
-    private class CacheEntry {
-        int cachePreviousPosI;
-        int cachePreviousPosJ;
-        Operation<V> operation;
-        int treeDistanceI;
-        int treeDistanceJ;
-
-        public CacheEntry(int cachePreviousPosI, int cachePreviousPosJ, Operation<V> operation) {
-            this.cachePreviousPosI = cachePreviousPosI;
-            this.cachePreviousPosJ = cachePreviousPosJ;
-            this.operation = operation;
-        }
     }
 
     private class TreeOrdering {
@@ -362,5 +339,19 @@ public class ZhangShashaTreeEditDistance<V, E> {
         INSERT,
         REMOVE,
         CHANGE
+    }
+
+    private class CacheEntry {
+        int cachePreviousPosI;
+        int cachePreviousPosJ;
+        Operation<V> operation;
+        int treeDistanceI;
+        int treeDistanceJ;
+
+        public CacheEntry(int cachePreviousPosI, int cachePreviousPosJ, Operation<V> operation) {
+            this.cachePreviousPosI = cachePreviousPosI;
+            this.cachePreviousPosJ = cachePreviousPosJ;
+            this.operation = operation;
+        }
     }
 }

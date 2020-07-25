@@ -17,11 +17,11 @@ import static org.jgrapht.alg.similarity.ZhangShashaTreeEditDistance.OperationTy
 import static org.junit.Assert.assertEquals;
 
 public class ZhangShashaTreeEditDistanceTest {
-    int[][] articleTree1 = new int[][]{{1, 2}, {1, 3}, {2, 4}, {2, 5}, {5, 6}};
-    int[][] articleTree2 = new int[][]{{1, 5}, {1, 3}, {5, 2}, {2, 4}, {2, 6}};
-    int[][] generatedTree = new int[][]{{1, 2}, {1, 4}, {2, 5}, {3, 6}, {4, 10}, {5, 6}, {5, 7}, {5, 9}, {7, 8}, {10, 4}};
-    int[][] tree1 = {{0, 1}, {0, 3}, {1, 4}, {1, 0}, {2, 5}, {3, 0}, {3, 9}, {4, 5}, {4, 6}, {4, 8}, {4, 1}, {5, 2}, {5, 4}, {6, 7}, {6, 4}, {7, 6}, {8, 4}, {9, 3}};
-    int[][] tree2 = {{0, 3}, {0, 6}, {0, 4}, {0, 9}, {1, 8}, {1, 2}, {2, 5}, {2, 1}, {2, 4}, {3, 0}, {4, 7}, {4, 2}, {4, 0}, {5, 2}, {6, 0}, {7, 4}, {8, 1}, {9, 0}};
+    int[][] articleTree1 = {{1, 2}, {1, 3}, {2, 4}, {2, 5}, {5, 6}};
+    int[][] articleTree2 = {{1, 5}, {1, 3}, {5, 2}, {2, 4}, {2, 6}};
+    int[][] tree1 = {{1, 2}, {1, 4}, {2, 5}, {3, 6}, {4, 10}, {5, 6}, {5, 7}, {5, 9}, {7, 8}, {10, 4}};
+    int[][] tree2 = {{0, 1}, {0, 3}, {1, 4}, {1, 0}, {2, 5}, {3, 0}, {3, 9}, {4, 5}, {4, 6}, {4, 8}, {4, 1}, {5, 2}, {5, 4}, {6, 7}, {6, 4}, {7, 6}, {8, 4}, {9, 3}};
+    int[][] tree3 = {{0, 3}, {0, 6}, {0, 4}, {0, 9}, {1, 8}, {1, 2}, {2, 5}, {2, 1}, {2, 4}, {3, 0}, {4, 7}, {4, 2}, {4, 0}, {5, 2}, {6, 0}, {7, 4}, {8, 1}, {9, 0}};
 
 
     private static void testOnTrees(Graph<Integer, DefaultEdge> tree1, int root1,
@@ -29,9 +29,10 @@ public class ZhangShashaTreeEditDistanceTest {
                                     double expectedDistance, Set<Operation<Integer>> expectedOperations) {
         ZhangShashaTreeEditDistance<Integer, DefaultEdge> treeEditDistance
                 = new ZhangShashaTreeEditDistance<>(tree1, root1, tree2, root2);
+
         double distance = treeEditDistance.getDistance();
         List<Operation<Integer>> actualOperations = treeEditDistance.getOperationLists();
-        actualOperations.forEach(System.out::println);
+
         assertEquals(expectedDistance, distance, 1e-9);
         assertEquals(expectedOperations, new HashSet<>(actualOperations));
     }
@@ -45,14 +46,14 @@ public class ZhangShashaTreeEditDistanceTest {
     }
 
     @Test
-    public void testTED_BothTreesAreEmpty() {
+    public void testTED_treeWithOneVertex_to_treeWithOneVertex() {
         Set<Operation<Integer>> expectedOperations = Collections.singleton(
                 new Operation<>(OperationType.CHANGE, 1, 1));
         testOnTrees(getGraphWithOneVertex(), 1, getGraphWithOneVertex(), 1, 0.0, expectedOperations);
     }
 
     @Test
-    public void testTED_FirstTreeIsEmpty() {
+    public void testTED_treeWithOneVertex_to_articleTree2() {
         Set<Operation<Integer>> expectedOperations = new HashSet<>(
                 Arrays.asList(
                         new Operation<>(OperationType.CHANGE, 1, 1),
@@ -67,7 +68,7 @@ public class ZhangShashaTreeEditDistanceTest {
     }
 
     @Test
-    public void testTED_SecondTreeIsEmpty() {
+    public void testTED_articleTree1_to_treeWithOneVertex() {
         Set<Operation<Integer>> expectedOperations = new HashSet<>(
                 Arrays.asList(
                         new Operation<>(OperationType.CHANGE, 1, 1),
@@ -82,7 +83,7 @@ public class ZhangShashaTreeEditDistanceTest {
     }
 
     @Test
-    public void testTED_TreesOfEqualSize() {
+    public void testTED_articleTree1_to_articleTree2() {
         Set<Operation<Integer>> expectedOperations = new HashSet<>(
                 Arrays.asList(
                         new Operation<>(OperationType.REMOVE, 5, null),
@@ -98,7 +99,7 @@ public class ZhangShashaTreeEditDistanceTest {
     }
 
     @Test
-    public void testTED_FirstTreeLarger() {
+    public void testTED_tree1_to_articleTree2() {
         Set<Operation<Integer>> expectedOperations = new HashSet<>(
                 Arrays.asList(
                         new Operation<>(OperationType.CHANGE, 1, 1),
@@ -115,11 +116,11 @@ public class ZhangShashaTreeEditDistanceTest {
                         new Operation<>(OperationType.INSERT, 4, null)
                 )
         );
-        testOnTrees(readGraph(generatedTree), 1, readGraph(articleTree2), 1, 9.0, expectedOperations);
+        testOnTrees(readGraph(tree1), 1, readGraph(articleTree2), 1, 9.0, expectedOperations);
     }
 
     @Test
-    public void testTED_SecondTreeLarger() {
+    public void testTED_articleTree1_to_tree1() {
         Set<Operation<Integer>> expectedOperations = new HashSet<>(
                 Arrays.asList(
                         new Operation<>(OperationType.CHANGE, 1, 1),
@@ -135,11 +136,11 @@ public class ZhangShashaTreeEditDistanceTest {
                         new Operation<>(OperationType.REMOVE, 4, null)
                 )
         );
-        testOnTrees(readGraph(articleTree1), 1, readGraph(generatedTree), 1, 7.0, expectedOperations);
+        testOnTrees(readGraph(articleTree1), 1, readGraph(tree1), 1, 7.0, expectedOperations);
     }
 
     @Test
-    public void testTED_tree1_to_tree2() {
+    public void testTED_tree2_to_tree3() {
         Set<Operation<Integer>> expectedOperations = new HashSet<>(
                 Arrays.asList(
                         new Operation<>(OperationType.CHANGE, 0, 0),
@@ -159,7 +160,7 @@ public class ZhangShashaTreeEditDistanceTest {
                         new Operation<>(OperationType.INSERT, 3, null)
                 )
         );
-        testOnTrees(readGraph(tree1), 0, readGraph(tree2), 0, 10.0, expectedOperations);
+        testOnTrees(readGraph(tree2), 0, readGraph(tree3), 0, 10.0, expectedOperations);
     }
 
     private static Graph<Integer, DefaultEdge> getGraphWithOneVertex() {
