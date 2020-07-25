@@ -25,7 +25,7 @@ public class ZhangShashaTreeEditDistance<V, E> {
     private ToDoubleBiFunction<V, V> changeCost;
 
     private double[][] treeDistance;
-    private List<Operation> operationsList;
+    private List<List<List<Operation<V>>>> operationLists;
 
     private boolean algorithmExecuted;
 
@@ -48,7 +48,6 @@ public class ZhangShashaTreeEditDistance<V, E> {
         this.insertCost = Objects.requireNonNull(insertCost, "insertCost cannot be null!");
         this.removeCost = Objects.requireNonNull(removeCost, "removeCost cannot be null!");
         this.changeCost = Objects.requireNonNull(changeCost, "changeCost cannot be null!");
-        this.operationsList = new ArrayList<>();
         if (!GraphTests.isTree(graph1)) {
             throw new IllegalArgumentException("graph1 must be a tree!");
         }
@@ -59,18 +58,24 @@ public class ZhangShashaTreeEditDistance<V, E> {
         int m = graph1.vertexSet().size();
         int n = graph2.vertexSet().size();
         treeDistance = new double[m][n];
+        operationLists = new ArrayList<>(m);
+        for (int i = 0; i < m; ++i) {
+            operationLists.add(new ArrayList<>(Collections.nCopies(n, null)));
+        }
     }
 
     public double getDistance() {
         lazyComputeEditDistance();
-        int s1 = graph1.vertexSet().size();
-        int s2 = graph2.vertexSet().size();
-        return treeDistance[s1 - 1][s2 - 1];
+        int m = graph1.vertexSet().size();
+        int n = graph2.vertexSet().size();
+        return treeDistance[m - 1][n - 1];
     }
 
-    public List<Operation> getOperationsList() {
+    public List<Operation<V>> getOperationLists() {
         lazyComputeEditDistance();
-        return operationsList;
+        int m = graph1.vertexSet().size();
+        int n = graph2.vertexSet().size();
+        return operationLists.get(m - 1).get(n - 1);
     }
 
     private void lazyComputeEditDistance() {
@@ -78,8 +83,8 @@ public class ZhangShashaTreeEditDistance<V, E> {
             TreeOrdering ordering1 = new TreeOrdering(graph1, root1);
             TreeOrdering ordering2 = new TreeOrdering(graph2, root2);
 
-            for (int keyroot1 : ordering1.keyroots) {
-                for (Integer keyroot2 : ordering2.keyroots) {
+            for (int keyroot1 : ordering1.keyRoots) {
+                for (Integer keyroot2 : ordering2.keyRoots) {
                     treeDistance(keyroot1, keyroot2, ordering1, ordering2);
                 }
             }
@@ -95,6 +100,10 @@ public class ZhangShashaTreeEditDistance<V, E> {
         int m = i - li + 2;
         int n = j - lj + 2;
         double[][] forestdist = new double[m][n];
+        List<List<CacheEntry>> cachedOperations = new ArrayList<>(m);
+        for (int k = 0; k < m; ++k) {
+            cachedOperations.add(new ArrayList<>(Collections.nCopies(n, null)));
+        }
 
         int iOffset = li - 1;
         int jOffset = lj - 1;
@@ -103,11 +112,15 @@ public class ZhangShashaTreeEditDistance<V, E> {
             V i1Vertex = ordering1.indexToVertexMap.get(i1);
             int iIndex = i1 - iOffset;
             forestdist[iIndex][0] = forestdist[iIndex - 1][0] + removeCost.applyAsDouble(i1Vertex);
+            CacheEntry entry = new CacheEntry(iIndex - 1, 0, new Operation<>(OperationType.REMOVE, i1Vertex, null));
+            cachedOperations.get(iIndex).set(0, entry);
         }
         for (int j1 = lj; j1 <= j; ++j1) {
             V j1Vertex = ordering2.indexToVertexMap.get(j1);
             int jIndex = j1 - jOffset;
             forestdist[0][jIndex] = forestdist[0][jIndex - 1] + removeCost.applyAsDouble(j1Vertex);
+            CacheEntry entry = new CacheEntry(0, jIndex - 1, new Operation<>(OperationType.INSERT, j1Vertex, null));
+            cachedOperations.get(0).set(jIndex, entry);
         }
 
         for (int i1 = li; i1 <= i; ++i1) {
@@ -126,25 +139,39 @@ public class ZhangShashaTreeEditDistance<V, E> {
                     double dist3 = forestdist[iIndex - 1][jIndex - 1] + changeCost.applyAsDouble(i1Vertex, j1Vertex);
                     double result = Math.min(dist1, Math.min(dist2, dist3));
 
-//                    Operation op;
-//                    if (result == dist1) { // remove operation
-//                        op = new Operation(OperationType.REMOVE, i1Vertex, null);
-//                    } else if (result == dist2) { // insert operation
-//                        op = new Operation(OperationType.INSERT, j1Vertex, null);
-//                    } else { // result == dist3 => change operation
-//                        op = new Operation(OperationType.CHANGE, i1Vertex, j1Vertex);
-//                    }
-//                    operationsList.add(op);
+                    CacheEntry entry;
+                    if (result == dist1) { // remove operation
+                        entry = new CacheEntry(iIndex - 1, jIndex, new Operation<>(OperationType.REMOVE, i1Vertex, null));
+                    } else if (result == dist2) { // insert operation
+                        entry = new CacheEntry(iIndex, jIndex - 1, new Operation<>(OperationType.INSERT, j1Vertex, null));
+                    } else { // result == dist3 => change operation
+                        entry = new CacheEntry(iIndex - 1, jIndex - 1, new Operation<>(OperationType.CHANGE, i1Vertex, j1Vertex));
+                    }
+                    cachedOperations.get(iIndex).set(jIndex, entry);
 
                     forestdist[iIndex][jIndex] = result;
                     treeDistance[i1 - 1][j1 - 1] = result;
+                    operationLists.get(i1 - 1).set(j1 - 1, restoreOperationsList(cachedOperations, iIndex, jIndex));
                 } else {
-                    int p = li1 - 1 - iOffset;
-                    int q = lj1 - 1 - jOffset;
+                    int i2 = li1 - 1 - iOffset;
+                    int j2 = lj1 - 1 - jOffset;
                     double dist1 = forestdist[iIndex - 1][jIndex] + removeCost.applyAsDouble(i1Vertex);
                     double dist2 = forestdist[iIndex][jIndex - 1] + insertCost.applyAsDouble(j1Vertex);
-                    double dist3 = forestdist[p][q] + treeDistance[i1 - 1][j1 - 1];
-                    forestdist[iIndex][jIndex] = Math.min(dist1, Math.min(dist2, dist3));
+                    double dist3 = forestdist[i2][j2] + treeDistance[i1 - 1][j1 - 1];
+                    double result = Math.min(dist1, Math.min(dist2, dist3));
+                    forestdist[iIndex][jIndex] = result;
+
+                    CacheEntry entry;
+                    if (result == dist1) {
+                        entry = new CacheEntry(iIndex - 1, jIndex, new Operation<>(OperationType.REMOVE, i1Vertex, null));
+                    } else if (result == dist2) {
+                        entry = new CacheEntry(iIndex, jIndex - 1, new Operation<>(OperationType.INSERT, j1Vertex, null));
+                    } else {
+                        entry = new CacheEntry(i2, j2, null);
+                        entry.treeDistanceI = i1 - 1;
+                        entry.treeDistanceJ = j1 - 1;
+                    }
+                    cachedOperations.get(iIndex).set(jIndex, entry);
                 }
             }
         }
@@ -159,11 +186,41 @@ public class ZhangShashaTreeEditDistance<V, E> {
 //        System.out.println();
     }
 
+    private List<Operation<V>> restoreOperationsList(List<List<CacheEntry>> cachedOperations, int i, int j) {
+        List<Operation<V>> result = new ArrayList<>();
+
+        CacheEntry it = cachedOperations.get(i).get(j);
+        while (it != null) {
+            if (it.operation == null) {
+                result.addAll(operationLists.get(it.treeDistanceI).get(it.treeDistanceJ));
+            } else {
+                result.add(it.operation);
+            }
+            it = cachedOperations.get(it.cachePreviousPosI).get(it.cachePreviousPosJ);
+        }
+
+        return result;
+    }
+
+    private class CacheEntry {
+        int cachePreviousPosI;
+        int cachePreviousPosJ;
+        Operation<V> operation;
+        int treeDistanceI;
+        int treeDistanceJ;
+
+        public CacheEntry(int cachePreviousPosI, int cachePreviousPosJ, Operation<V> operation) {
+            this.cachePreviousPosI = cachePreviousPosI;
+            this.cachePreviousPosJ = cachePreviousPosJ;
+            this.operation = operation;
+        }
+    }
+
     private class TreeOrdering {
         final Graph<V, E> tree;
         final V treeRoot;
 
-        List<Integer> keyroots;
+        List<Integer> keyRoots;
 
         List<V> indexToVertexMap;
         List<Integer> indexToLMap;
@@ -174,20 +231,20 @@ public class ZhangShashaTreeEditDistance<V, E> {
             this.treeRoot = treeRoot;
 
             int numberOfVertices = tree.vertexSet().size();
-            keyroots = new ArrayList<>();
+            keyRoots = new ArrayList<>();
             indexToVertexMap = new ArrayList<>(Collections.nCopies(numberOfVertices + 1, null));
             indexToLMap = new ArrayList<>(Collections.nCopies(numberOfVertices + 1, null));
             currentIndex = 1;
 
-            computeKeyrootsAndMapping(treeRoot);
+            computeKeyRootsAndMapping(treeRoot);
         }
 
-        private class RecursionEntry {
+        private class StackEntry {
             V v;
-            boolean isKeyroot;
+            boolean isKeyRoot;
 
             V vParent;
-            boolean isKeyrootArg;
+            boolean isKeyRootArg;
             int lValue;
             Iterator<V> vChildIterator;
             V vChild;
@@ -195,20 +252,19 @@ public class ZhangShashaTreeEditDistance<V, E> {
 
             int state;
 
-            public RecursionEntry(V v, boolean isKeyroot) {
+            public StackEntry(V v, boolean isKeyRoot) {
                 this.v = v;
-                this.isKeyroot = isKeyroot;
+                this.isKeyRoot = isKeyRoot;
                 this.lValue = -1;
             }
-
         }
 
-        private void computeKeyrootsAndMapping(V treeRoot) {
-            List<RecursionEntry> stack = new ArrayList<>();
-            stack.add(new RecursionEntry(treeRoot, true));
+        private void computeKeyRootsAndMapping(V treeRoot) {
+            List<StackEntry> stack = new ArrayList<>();
+            stack.add(new StackEntry(treeRoot, true));
 
             while (!stack.isEmpty()) {
-                RecursionEntry entry = stack.get(stack.size() - 1);
+                StackEntry entry = stack.get(stack.size() - 1);
                 if (entry.state == 0) {
                     if (stack.size() > 1) {
                         entry.vParent = stack.get(stack.size() - 2).v;
@@ -219,14 +275,14 @@ public class ZhangShashaTreeEditDistance<V, E> {
                     if (entry.vChildIterator.hasNext()) {
                         entry.vChild = entry.vChildIterator.next();
                         if (entry.vParent == null || !entry.vChild.equals(entry.vParent)) {
-                            stack.add(new RecursionEntry(entry.vChild, entry.isKeyrootArg));
+                            stack.add(new StackEntry(entry.vChild, entry.isKeyRootArg));
                             entry.state = 2;
                         }
                     } else {
                         entry.state = 3;
                     }
                 } else if (entry.state == 2) {
-                    entry.isKeyrootArg = true;
+                    entry.isKeyRootArg = true;
                     if (entry.lValue == -1) {
                         entry.lValue = entry.lVChild;
                     }
@@ -235,8 +291,8 @@ public class ZhangShashaTreeEditDistance<V, E> {
                     if (entry.lValue == -1) {
                         entry.lValue = currentIndex;
                     }
-                    if (entry.isKeyroot) {
-                        keyroots.add(currentIndex);
+                    if (entry.isKeyRoot) {
+                        keyRoots.add(currentIndex);
                     }
                     indexToVertexMap.set(currentIndex, entry.v);
                     indexToLMap.set(currentIndex, entry.lValue);
@@ -250,7 +306,7 @@ public class ZhangShashaTreeEditDistance<V, E> {
         }
     }
 
-    public class Operation {
+    public static class Operation<V> {
         private final OperationType type;
         private final V firstOperand;
         private final V secondOperand;
@@ -271,6 +327,34 @@ public class ZhangShashaTreeEditDistance<V, E> {
             this.type = type;
             this.firstOperand = firstOperand;
             this.secondOperand = secondOperand;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            Operation<?> operation = (Operation<?>) o;
+
+            if (type != operation.type) return false;
+            if (!firstOperand.equals(operation.firstOperand)) return false;
+            return secondOperand != null ? secondOperand.equals(operation.secondOperand) : operation.secondOperand == null;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = type.hashCode();
+            result = 31 * result + firstOperand.hashCode();
+            result = 31 * result + (secondOperand != null ? secondOperand.hashCode() : 0);
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            if (type.equals(OperationType.INSERT) || type.equals(OperationType.REMOVE)) {
+                return type + " " + firstOperand;
+            }
+            return type + " " + firstOperand + " -> " + secondOperand;
         }
     }
 
